@@ -1,0 +1,5 @@
+{
+  "probe_ms": 254,
+  "total_ms": 384,
+  "victim_warmup_ms": 100
+}

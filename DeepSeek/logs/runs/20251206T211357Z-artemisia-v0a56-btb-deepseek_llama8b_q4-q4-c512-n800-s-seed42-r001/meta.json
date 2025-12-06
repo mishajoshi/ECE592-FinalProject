@@ -1,0 +1,33 @@
+{
+  "attacker_cpu": 56,
+  "ctx": 512,
+  "decoding": "sample",
+  "durations_ms": {
+    "probe_ms": 91,
+    "total_ms": 225,
+    "victim_warmup_ms": 100
+  },
+  "host": "artemisia",
+  "model": "/home/mjoshi7/llama.cpp/models/deepseek-llama8b-q4.gguf",
+  "model_tag": "deepseek_llama8b_q4",
+  "npredict": 800,
+  "probe": "btb",
+  "prompt": "Derive \u222b\u2080\u221e x\u2074 e^(\u2212x\u00b2/3) dx and generalize to \u222b\u2080\u221e x\u207f e^(\u2212a x\u00b2) dx using gamma functions with full symbolic steps.",
+  "prompt_hash": "",
+  "prompt_label": "math",
+  "quant": "q4",
+  "repeat_idx": 1,
+  "run_id": "20251206T211357Z-artemisia-v0a56-btb-deepseek_llama8b_q4-q4-c512-n800-s-seed42-r001",
+  "seed": 42,
+  "temp": 0.9,
+  "timestamp_utc": "2025-12-06T21:13:57Z",
+  "top_k": 40,
+  "top_p": null,
+  "versions": {
+    "analysis_git": null,
+    "driver": "v0.1",
+    "llama_cpp_git": null,
+    "probe_git": null
+  },
+  "victim_cpu": 0
+}

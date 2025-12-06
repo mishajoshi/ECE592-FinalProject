@@ -1,0 +1,33 @@
+{
+  "attacker_cpu": 56,
+  "ctx": 128,
+  "decoding": "greedy",
+  "durations_ms": {
+    "probe_ms": 115,
+    "total_ms": 242,
+    "victim_warmup_ms": 100
+  },
+  "host": "artemisia",
+  "model": "/home/mjoshi7/llama.cpp/models/deepseek-llama8b-q4.gguf",
+  "model_tag": "deepseek_llama8b_q4",
+  "npredict": 256,
+  "probe": "cache",
+  "prompt": "",
+  "prompt_hash": "",
+  "prompt_label": "custom",
+  "quant": "q4",
+  "repeat_idx": 3,
+  "run_id": "20251206T211258Z-artemisia-v0a56-cache-deepseek_llama8b_q4-q4-c128-n256-g-seed42-r003",
+  "seed": 42,
+  "temp": 0.0,
+  "timestamp_utc": "2025-12-06T21:12:58Z",
+  "top_k": null,
+  "top_p": null,
+  "versions": {
+    "analysis_git": null,
+    "driver": "v0.1",
+    "llama_cpp_git": null,
+    "probe_git": null
+  },
+  "victim_cpu": 0
+}

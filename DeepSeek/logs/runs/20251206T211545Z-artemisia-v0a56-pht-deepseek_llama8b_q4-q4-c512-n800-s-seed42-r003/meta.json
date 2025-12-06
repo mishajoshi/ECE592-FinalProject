@@ -1,0 +1,33 @@
+{
+  "attacker_cpu": 56,
+  "ctx": 512,
+  "decoding": "sample",
+  "durations_ms": {
+    "probe_ms": 154,
+    "total_ms": 281,
+    "victim_warmup_ms": 100
+  },
+  "host": "artemisia",
+  "model": "/home/mjoshi7/llama.cpp/models/deepseek-llama8b-q4.gguf",
+  "model_tag": "deepseek_llama8b_q4",
+  "npredict": 800,
+  "probe": "pht",
+  "prompt": "Write a full multi-threaded C++ task scheduler using work-stealing deques, condition variables, and error handling.",
+  "prompt_hash": "",
+  "prompt_label": "code",
+  "quant": "q4",
+  "repeat_idx": 3,
+  "run_id": "20251206T211545Z-artemisia-v0a56-pht-deepseek_llama8b_q4-q4-c512-n800-s-seed42-r003",
+  "seed": 42,
+  "temp": 0.9,
+  "timestamp_utc": "2025-12-06T21:15:45Z",
+  "top_k": 40,
+  "top_p": null,
+  "versions": {
+    "analysis_git": null,
+    "driver": "v0.1",
+    "llama_cpp_git": null,
+    "probe_git": null
+  },
+  "victim_cpu": 0
+}
