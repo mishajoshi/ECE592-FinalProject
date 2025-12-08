@@ -1,0 +1,298 @@
+@misc{tinyllama,
+  title={TinyLLaMA: An Open-Source Small Language Model},
+  author={Zhang, Peiyuan and Zeng, Guangtao and Wang, Tianduo and Lu, Wei},
+  year={2024},
+  howpublished={\url{https://github.com/jzhang38/TinyLLaMA}}
+}
+
+@misc{llamacpp,
+  title={llama.cpp: Port of Facebook's LLaMA model in C/C++},
+  author={Gerganov, Georgi and contributors},
+  year={2023},
+  howpublished={\url{https://github.com/ggerganov/llama.cpp}}
+}
+
+@misc{deepseek,
+  title={DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning},
+  author={DeepSeek-AI},
+  year={2024},
+  howpublished={\url{https://github.com/deepseek-ai/DeepSeek-R1}}
+}
+
+@inproceedings{osvik2006cache,
+  title={Cache attacks and countermeasures: the case of {AES}},
+  author={Osvik, Dag Arne and Shamir, Adi and Tromer, Eran},
+  booktitle={Cryptographers' Track at the RSA Conference},
+  pages={1--20},
+  year={2006},
+  organization={Springer}
+}
+
+@inproceedings{yarom2014flush,
+  title={{FLUSH+RELOAD}: A high resolution, low noise, {L3} cache side-channel attack},
+  author={Yarom, Yuval and Falkner, Katrina},
+  booktitle={23rd USENIX Security Symposium},
+  pages={719--732},
+  year={2014}
+}
+
+@inproceedings{bernstein2005cache,
+  title={Cache-timing attacks on {AES}},
+  author={Bernstein, Daniel J},
+  booktitle={Technical report},
+  year={2005}
+}
+
+@inproceedings{yarom2014recovering,
+  title={Recovering {OpenSSL} {ECDSA} nonces using the {FLUSH+RELOAD} cache side-channel attack},
+  author={Yarom, Yuval and Benger, Naomi},
+  booktitle={Cryptology ePrint Archive},
+  year={2014}
+}
+
+@inproceedings{irazoqui2014wait,
+  title={Wait a minute! A fast, Cross-{VM} attack on {AES}},
+  author={Irazoqui, Gorka and Eisenbarth, Thomas and Sunar, Berk},
+  booktitle={International Workshop on Recent Advances in Intrusion Detection},
+  pages={299--319},
+  year={2014},
+  organization={Springer}
+}
+
+@inproceedings{genkin2016get,
+  title={Get your hands off my laptop: Physical side-channel key-extraction attacks on {PCs}},
+  author={Genkin, Daniel and Pachmanov, Lev and Pipman, Itamar and Tromer, Eran and Yarom, Yuval},
+  booktitle={International Workshop on Cryptographic Hardware and Embedded Systems},
+  pages={242--260},
+  year={2016},
+  organization={Springer}
+}
+
+@inproceedings{lee2017inferring,
+  title={Inferring fine-grained control flow inside {SGX} enclaves with branch shadowing},
+  author={Lee, Sangho and Shih, Ming-Wei and Gera, Prasun and Kim, Taesoo and Kim, Hyesoon and Peinado, Marcus},
+  booktitle={26th USENIX Security Symposium},
+  pages={557--574},
+  year={2017}
+}
+
+@inproceedings{evtyushkin2016jump,
+  title={Jump over {ASLR}: Attacking branch predictors to bypass {ASLR}},
+  author={Evtyushkin, Dmitry and Ponomarev, Dmitry and Abu-Ghazaleh, Nael},
+  booktitle={49th Annual IEEE/ACM International Symposium on Microarchitecture (MICRO)},
+  pages={1--13},
+  year={2016},
+  organization={IEEE}
+}
+
+@inproceedings{gras2018translation,
+  title={Translation leak-aside buffer: Defeating cache side-channel protections with {TLB} attacks},
+  author={Gras, Ben and Razavi, Kaveh and Bos, Herbert and Giuffrida, Cristiano},
+  booktitle={27th USENIX Security Symposium},
+  pages={955--972},
+  year={2018}
+}
+
+@inproceedings{kocher2018spectre,
+  title={Spectre attacks: Exploiting speculative execution},
+  author={Kocher, Paul and Horn, Jann and Fogh, Anders and Genkin, Daniel and Gruss, Daniel and Haas, Werner and Hamburg, Mike and Lipp, Moritz and Mangard, Stefan and Prescher, Thomas and others},
+  booktitle={40th IEEE Symposium on Security and Privacy (S\&P)},
+  pages={1--19},
+  year={2019},
+  organization={IEEE}
+}
+
+@inproceedings{lipp2018meltdown,
+  title={Meltdown: Reading kernel memory from user space},
+  author={Lipp, Moritz and Schwarz, Michael and Gruss, Daniel and Prescher, Thomas and Haas, Werner and Fogh, Anders and Horn, Jann and Mangard, Stefan and Kocher, Paul and Genkin, Daniel and others},
+  booktitle={27th USENIX Security Symposium},
+  pages={973--990},
+  year={2018}
+}
+
+@inproceedings{oh2019towards,
+  title={Towards reverse-engineering black-box neural networks},
+  author={Oh, Seong Joon and Schiele, Bernt and Fritz, Mario},
+  booktitle={International Conference on Learning Representations},
+  year={2019}
+}
+
+@inproceedings{yan2020cache,
+  title={Cache telepathy: Leveraging shared resource attacks to learn {DNN} architectures},
+  author={Yan, Mengjia and Fletcher, Christopher W and Torrellas, Josep},
+  booktitle={29th USENIX Security Symposium},
+  pages={2003--2020},
+  year={2020}
+}
+
+@inproceedings{chen2019neural,
+  title={Neural network inversion in adversarial setting via background knowledge alignment},
+  author={Chen, Ziqi and Kailkhura, Bhavya and Varshney, Pratyush},
+  booktitle={Proceedings of the 2019 ACM SIGSAC Conference on Computer and Communications Security},
+  pages={225--240},
+  year={2019}
+}
+
+@inproceedings{duddu2018stealing,
+  title={Stealing neural networks via timing side channels},
+  author={Duddu, Vasisht and Samanta, Debdeep and Rao, D Vijay and Balas, Valentina E},
+  booktitle={arXiv preprint arXiv:1812.11720},
+  year={2018}
+}
+
+@inproceedings{shokri2017membership,
+  title={Membership inference attacks against machine learning models},
+  author={Shokri, Reza and Stronati, Marco and Song, Congzheng and Shmatikov, Vitaly},
+  booktitle={2017 IEEE Symposium on Security and Privacy (SP)},
+  pages={3--18},
+  year={2017},
+  organization={IEEE}
+}
+
+@inproceedings{salem2018ml,
+  title={{ML-Leaks}: Model and data independent membership inference attacks and defenses on machine learning models},
+  author={Salem, Ahmed and Zhang, Yang and Humbert, Mathias and Berrang, Pascal and Fritz, Mario and Backes, Michael},
+  booktitle={Network and Distributed System Security Symposium},
+  year={2019}
+}
+
+@inproceedings{naghibijouybari2018gpu,
+  title={Constructing and characterizing covert channels on {GPGPUs}},
+  author={Naghibijouybari, Hoda and Neupane, Ajaya and Qian, Zhiyun and Abu-Ghazaleh, Nael},
+  booktitle={51st Annual IEEE/ACM International Symposium on Microarchitecture},
+  pages={547--559},
+  year={2018},
+  organization={IEEE}
+}
+
+@inproceedings{krishna2019rowhammer,
+  title={Rowhammer on network-on-chip architectures},
+  author={Krishna, Aditya and others},
+  booktitle={arXiv preprint arXiv:1911.09954},
+  year={2019}
+}
+
+@inproceedings{meng2021leaky,
+  title={Leaky cauldron on the dark land: Understanding memory side-channel hazards in {SGX}},
+  author={Meng, Wenjia and others},
+  booktitle={Proceedings of the 2021 ACM SIGSAC Conference on Computer and Communications Security},
+  pages={2421--2437},
+  year={2021}
+}
+
+@article{perez2022ignore,
+  title={Ignore previous prompt: Attack techniques for language models},
+  author={Perez, Fábio and Ribeiro, Ian},
+  journal={arXiv preprint arXiv:2211.09527},
+  year={2022}
+}
+
+@inproceedings{krishna2020thieves,
+  title={Thieves on sesame street! Model extraction of {BERT}-based {APIs}},
+  author={Krishna, Kalpesh and Tomar, Gaurav Singh and Parikh, Ankur P and Papernot, Nicolas and Iyyer, Mohit},
+  booktitle={International Conference on Learning Representations},
+  year={2020}
+}
+
+@inproceedings{carlini2021extracting,
+  title={Extracting training data from large language models},
+  author={Carlini, Nicholas and Tramer, Florian and Wallace, Eric and Jagielski, Matthew and Herbert-Voss, Ariel and Lee, Katherine and Roberts, Adam and Brown, Tom and Song, Dawn and Erlingsson, Ulfar and others},
+  booktitle={30th USENIX Security Symposium},
+  pages={2633--2650},
+  year={2021}
+}
+
+@article{song2021auditing,
+  title={Auditing privacy defenses in federated learning via generative gradient leakage},
+  author={Song, Zihao and others},
+  journal={arXiv preprint arXiv:2203.15696},
+  year={2022}
+}
+
+@inproceedings{oren2015spy,
+  title={The spy in the sandbox: Practical cache attacks in {JavaScript} and their implications},
+  author={Oren, Yossef and Kemerlis, Vasileios P and Sethumadhavan, Simha and Keromytis, Angelos D},
+  booktitle={Proceedings of the 22nd ACM SIGSAC Conference on Computer and Communications Security},
+  pages={1406--1418},
+  year={2015}
+}
+
+@inproceedings{van2018foreshadow,
+  title={Foreshadow: Extracting the keys to the {Intel SGX} kingdom with transient out-of-order execution},
+  author={Van Bulck, Jo and Minkin, Marina and Weisse, Ofir and Genkin, Daniel and Kasikci, Baris and Piessens, Frank and Silberstein, Mark and Wenisch, Thomas F and Yarom, Yuval and Strackx, Raoul},
+  booktitle={27th USENIX Security Symposium},
+  pages={991--1008},
+  year={2018}
+}
+
+@techreport{openai2023gpt4,
+  title={{GPT-4} Technical Report},
+  author={OpenAI},
+  year={2023},
+  institution={OpenAI},
+  note={arXiv:2303.08774}
+}
+
+@inproceedings{holtzman2019curious,
+  title={The curious case of neural text degeneration},
+  author={Holtzman, Ari and Buys, Jan and Du, Li and Forbes, Maxwell and Choi, Yejin},
+  booktitle={International Conference on Learning Representations},
+  year={2020}
+}
+
+@inproceedings{gu2017badnets,
+  title={{BadNets}: Identifying vulnerabilities in the machine learning model supply chain},
+  author={Gu, Tianyu and Dolan-Gavitt, Brendan and Garg, Siddharth},
+  booktitle={IEEE Access},
+  volume={7},
+  pages={54504--54512},
+  year={2019}
+}
+
+@inproceedings{gruss2017strong,
+  title={Strong and efficient cache side-channel protection using hardware transactional memory},
+  author={Gruss, Daniel and Lettner, Julian and Schuster, Felix and Ohrimenko, Olga and Haller, Istvan and Costa, Manuel},
+  booktitle={26th USENIX Security Symposium},
+  pages={217--233},
+  year={2017}
+}
+
+@inproceedings{wang2019mds,
+  title={{RIDL}: Rogue in-flight data load},
+  author={van Schaik, Stephan and Milburn, Alyssa and {\"O}sterlund, Sebastian and Frigo, Pietro and Maisuradze, Giorgi and Razavi, Kaveh and Bos, Herbert and Giuffrida, Cristiano},
+  booktitle={2019 IEEE Symposium on Security and Privacy},
+  pages={88--105},
+  year={2019}
+}
+
+@inproceedings{liu2015llc,
+  title={Last-level cache side-channel attacks are practical},
+  author={Liu, Fangfei and Yarom, Yuval and Ge, Qian and Heiser, Gernot and Lee, Ruby B},
+  booktitle={2015 IEEE Symposium on Security and Privacy},
+  pages={605--622},
+  year={2015}
+}
+
+@inproceedings{kocher2019spectre,
+  title={Spectre attacks: Exploiting speculative execution},
+  author={Kocher, Paul and Horn, Jann and Fogh, Anders and Genkin, Daniel and Gruss, Daniel and Haas, Werner and Hamburg, Mike and Lipp, Moritz and Mangard, Stefan and Prescher, Thomas and others},
+  booktitle={2019 IEEE Symposium on Security and Privacy},
+  pages={1--19},
+  year={2019}
+}
+
+@inproceedings{brumley2005remote,
+  title={Remote timing attacks are practical},
+  author={Brumley, David and Boneh, Dan},
+  booktitle={12th USENIX Security Symposium},
+  pages={1--14},
+  year={2003}
+}
+
+@manual{intel2016cat,
+  title={Intel 64 and {IA-32} Architectures Software Developer's Manual},
+  author={Intel},
+  organization={Intel Corporation},
+  year={2016},
+  note={Chapter 17: Resource Director Technology}
+}

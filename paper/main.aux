@@ -1,0 +1,166 @@
+\relax 
+\citation{osvik2006cache,yarom2014flush}
+\citation{oren2015spy}
+\citation{van2018foreshadow}
+\citation{yan2020cache}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{}\protected@file@percent }
+\newlabel{sec:introduction}{{I}{1}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-A}}Motivation and Problem Statement}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-B}}Research Questions}{1}{}\protected@file@percent }
+\citation{tinyllama}
+\citation{llamacpp}
+\citation{osvik2006cache}
+\citation{evtyushkin2016jump}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-C}}Contributions}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {I-D}}Paper Organization}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Background}{2}{}\protected@file@percent }
+\newlabel{sec:background}{{II}{2}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-A}}Large Language Model Inference}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-B}}TinyLLaMA and \texttt  {llama.cpp}}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {II-C}}Microarchitectural Side Channels}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-C}1}Cache Contention}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-C}2}TLB Contention}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-C}3}Branch Predictor Side Channels}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {II-C}4}SMT and Hyperthread Contention}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Threat Model}{2}{}\protected@file@percent }
+\newlabel{sec:threat-model}{{III}{2}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}System Model}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Attacker Capabilities}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Attacker Limitations}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Attack Goals}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-E}}Security Implications}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Methodology}{3}{}\protected@file@percent }
+\newlabel{sec:methodology}{{IV}{3}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-A}}Experimental Setup}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-A}1}Hardware and Software}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-A}2}Victim Configuration}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-B}}Probe Implementation}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-B}1}Cache Probe}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-B}2}TLB Probe}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-B}3}BTB Probe}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-B}4}PHT Probe}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-C}}Orchestration Framework}{3}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Representative histograms of cycle counts from different probe types showing distinct distribution characteristics.\relax }}{4}{}\protected@file@percent }
+\providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
+\newlabel{fig:cycle-histograms}{{1}{4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {IV-D}}Data Analysis Pipeline}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}1}Preprocessing}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}2}Feature Extraction}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {IV-D}3}Classification}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {V}Experimental Results}{4}{}\protected@file@percent }
+\newlabel{sec:results}{{V}{4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Overview}{4}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Summary of Attack Effectiveness\relax }}{4}{}\protected@file@percent }
+\newlabel{tab:results-summary}{{I}{4}}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Context Size Confusion Matrix (Recall)\relax }}{4}{}\protected@file@percent }
+\newlabel{tab:context-confusion}{{II}{4}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Context Size Inference}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}1}Overall Performance}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}2}Per-Class Analysis}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}3}Feature Importance}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-B}4}Analysis}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Decoding Strategy Inference}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-C}1}Overall Performance}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-C}2}Per-Class Analysis}{4}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Distribution shape analysis across attack targets. Skewness and kurtosis reveal distinct microarchitectural execution patterns: 512-token contexts show highest kurtosis, sampling exhibits higher skewness than greedy decoding, and custom prompts display the most extreme kurtosis values.\relax }}{5}{}\protected@file@percent }
+\newlabel{fig:skew-kurtosis-overview}{{2}{5}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Confusion matrix for context size classification showing strong 512-token recall.\relax }}{5}{}\protected@file@percent }
+\newlabel{fig:context-confusion}{{3}{5}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-C}3}Feature Importance}{5}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Feature importance for context size classification. Mean cycle count and distribution percentiles dominate.\relax }}{5}{}\protected@file@percent }
+\newlabel{fig:context-features}{{4}{5}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-C}4}Analysis}{5}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Confusion matrix for decoding strategy showing near-perfect greedy detection.\relax }}{6}{}\protected@file@percent }
+\newlabel{fig:decoding-confusion}{{5}{6}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Feature importance for decoding strategy. Tail percentiles (p99) are highly discriminative.\relax }}{6}{}\protected@file@percent }
+\newlabel{fig:decoding-features}{{6}{6}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-D}}Prompt Semantics Inference}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-D}1}Overall Performance}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-D}2}Per-Class Analysis}{6}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Confusion matrix for prompt semantics showing improved classification with skew/kurtosis features (61.4\% accuracy).\relax }}{6}{}\protected@file@percent }
+\newlabel{fig:semantics-confusion}{{7}{6}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Distribution shape analysis for prompt semantics. Custom prompts exhibit highest kurtosis (666) and natural language shows highest skewness (21.7), enabling improved classification beyond basic statistical features.\relax }}{6}{}\protected@file@percent }
+\newlabel{fig:skew-kurtosis-semantics}{{8}{6}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-D}3}Feature Importance}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-D}4}Analysis}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-E}}Probe Comparison}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-E}1}Cache vs.\ TLB for Context}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {V-E}2}BTB vs.\ PHT for Decoding and Semantics}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-F}}Statistical Significance}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Discussion}{7}{}\protected@file@percent }
+\newlabel{sec:discussion}{{VI}{7}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}Implications for LLM Privacy}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-A}1}Service Fingerprinting}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-A}2}Usage Pattern Analysis}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-A}3}Covert Channels}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-B}}Mitigation Strategies}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-B}1}SMT Isolation (Highly Effective)}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-B}2}Context Padding (Moderate Cost)}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-B}3}Decoding Normalization (Moderate Cost)}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-B}4}Noise Injection (Limited Effectiveness)}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {\mbox  {VI-B}5}Partitioning by Sensitivity}{7}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-C}}Limitations}{7}{}\protected@file@percent }
+\citation{bernstein2005cache}
+\citation{osvik2006cache}
+\citation{yarom2014flush}
+\citation{yarom2014recovering}
+\citation{irazoqui2014wait}
+\citation{genkin2016get}
+\citation{lee2017inferring}
+\citation{evtyushkin2016jump}
+\citation{gras2018translation}
+\citation{kocher2018spectre}
+\citation{lipp2018meltdown}
+\citation{oh2019towards}
+\citation{yan2020cache}
+\citation{chen2019neural}
+\citation{duddu2018stealing}
+\citation{shokri2017membership}
+\citation{salem2018ml}
+\citation{naghibijouybari2018gpu}
+\citation{krishna2019rowhammer}
+\citation{meng2021leaky}
+\citation{perez2022ignore}
+\citation{krishna2020thieves}
+\citation{carlini2021extracting}
+\citation{song2021auditing}
+\bibstyle{IEEEtran}
+\bibdata{references}
+\bibcite{osvik2006cache}{1}
+\bibcite{yarom2014flush}{2}
+\bibcite{oren2015spy}{3}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-D}}Future Work}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Related Work}{8}{}\protected@file@percent }
+\newlabel{sec:related}{{VII}{8}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Microarchitectural Side Channels}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-B}}Side Channels in Machine Learning}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-C}}LLM Security}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Conclusion}{8}{}\protected@file@percent }
+\newlabel{sec:conclusion}{{VIII}{8}}
+\@writefile{toc}{\contentsline {section}{References}{8}{}\protected@file@percent }
+\bibcite{van2018foreshadow}{4}
+\bibcite{yan2020cache}{5}
+\bibcite{tinyllama}{6}
+\bibcite{llamacpp}{7}
+\bibcite{evtyushkin2016jump}{8}
+\bibcite{bernstein2005cache}{9}
+\bibcite{yarom2014recovering}{10}
+\bibcite{irazoqui2014wait}{11}
+\bibcite{genkin2016get}{12}
+\bibcite{lee2017inferring}{13}
+\bibcite{gras2018translation}{14}
+\bibcite{kocher2018spectre}{15}
+\bibcite{lipp2018meltdown}{16}
+\bibcite{oh2019towards}{17}
+\bibcite{chen2019neural}{18}
+\bibcite{duddu2018stealing}{19}
+\bibcite{shokri2017membership}{20}
+\bibcite{salem2018ml}{21}
+\bibcite{naghibijouybari2018gpu}{22}
+\bibcite{krishna2019rowhammer}{23}
+\bibcite{meng2021leaky}{24}
+\bibcite{perez2022ignore}{25}
+\bibcite{krishna2020thieves}{26}
+\bibcite{carlini2021extracting}{27}
+\bibcite{song2021auditing}{28}
+\gdef \@abspage@last{9}

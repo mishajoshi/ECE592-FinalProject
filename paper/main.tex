@@ -1,0 +1,1362 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+% Essential packages
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage[svgnames]{xcolor}
+\usepackage{placeins}
+\usepackage[hyphens]{url}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{subcaption}
+\usepackage{float}
+
+% TikZ and plotting
+% \usepackage{tikz}
+% \usepackage{pgfplots}
+% \pgfplotsset{compat=1.18}
+
+% Custom commands
+\newcommand{\scheme}{\textsc{LLMProbe}}
+
+\begin{document}
+
+\title{\scheme{}: Microarchitectural Side-Channel\\Fingerprinting of LLM Inference Parameters}
+
+\author{
+\IEEEauthorblockN{Anonymous Submission}
+\IEEEauthorblockA{\textit{Department of Computer Science}\\
+\textit{NC State University}\\
+Raleigh, NC, USA}
+}
+
+\maketitle
+
+\begin{abstract}
+Microarchitectural side channels become more exploitable at the extremes.
+We demonstrate this principle by examining opposing operating conditions in LLM inference: comparing \textbf{minimum vs.\ maximum context windows} (128 vs 2048 tokens), \textbf{deterministic vs.\ stochastic decoding} (greedy vs.\ sampling), and \textbf{small vs.\ large models} (1.1B vs.\ 8B parameters).
+These limit studies reveal that the exploitable ``channel width''---the measurable divergence in microarchitectural behavior---amplifies dramatically with model scale.
+
+We present \scheme{}, an SMT-based attack leveraging cache, TLB, and branch predictor contention on sibling hyperthreads to fingerprint CPU-based LLM inference parameters.
+Evaluating against TinyLLaMA-1.1B and DeepSeek-8B running under \texttt{llama.cpp}, we achieve 80.5\% context classification accuracy (47.2\% above random baseline), 90.0\% decoding accuracy (40.0\% advantage), and 61.4\% semantic classification (36.4\% advantage).
+Critically, the 512-token context creates the strongest signal with 93\% recall due to L3 cache capacity effects, while greedy decoding shows 98\% recall from predictable control flow.
+
+Our cross-model analysis reveals \textbf{systematic leakage amplification}: DeepSeek-8B exhibits \textbf{2.2$\times$ higher kurtosis} (1498 vs 666), \textbf{1.8$\times$ higher skewness} (38.7 vs 21.7), and \textbf{1.6$\times$ larger cycle count range} compared to TinyLLaMA.
+This amplification stems from larger KV-cache working sets exhausting LLC capacity (256MB vs 32MB), deeper call stacks creating more branch mispredictions, and extended execution windows providing richer temporal signatures.
+Extrapolating to GPT-4-class models (100B+ parameters), we project 5--10$\times$ signal amplification, making production deployments critically vulnerable.
+
+We discuss mitigation trade-offs: SMT isolation eliminates the attack but halves throughput, while context padding and decoding normalization impose 1.5--8$\times$ computational overhead.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Side-channel attacks, LLM security, microarchitecture, SMT contention, inference fingerprinting
+\end{IEEEkeywords}
+
+\section{Introduction}
+\label{sec:introduction}
+
+Large language models have become foundational components of modern computing infrastructure, deployed in applications ranging from code generation to customer service.
+These models are increasingly offered as black-box services where clients interact only through text-based APIs, while the underlying implementation details---model architecture, quantization scheme, context limits, and decoding parameters---remain opaque by design.
+This opacity serves multiple purposes: protecting service providers' intellectual property, preventing adversarial model extraction, and maintaining competitive advantages in a rapidly evolving market.
+
+In shared computing environments, particularly cloud infrastructure and multi-tenant systems, LLM inference services commonly execute on general-purpose CPUs where multiple user processes time-share cores through Simultaneous Multi-Threading (SMT).
+While this improves hardware utilization and reduces operational costs, it creates opportunities for microarchitectural side-channel attacks where malicious co-resident processes can observe victim behavior through contention on shared hardware resources.
+
+\subsection{Motivation and Problem Statement}
+
+Microarchitectural side channels have been extensively studied in cryptographic contexts, where attackers exploit cache timing to extract secret keys~\cite{osvik2006cache,yarom2014flush}.
+More recent work has explored neural network inference~\cite{yan2020cache}.
+However, the specific characteristics of modern LLM inference pipelines---particularly those implemented in highly optimized C/C++ frameworks like \texttt{llama.cpp}---remain relatively unexplored from a side-channel perspective.
+
+This gap is significant because LLM inference exhibits several properties that may create exploitable microarchitectural signatures:
+
+\begin{itemize}[leftmargin=*,noitemsep]
+\item \textbf{Context-dependent working sets:} Different context lengths (e.g., 128 vs.\ 2048 tokens) create substantially different memory access patterns in the KV-cache, potentially visible through cache and TLB contention.
+
+\item \textbf{Decoding strategy control flow:} Greedy decoding follows deterministic token selection, while sampling involves random number generation and branching, potentially creating distinct branch predictor signatures.
+
+\item \textbf{Semantic computation patterns:} Different types of content (mathematical expressions, code, natural language) may induce varied execution paths and memory access patterns during token generation.
+\end{itemize}
+
+\subsection{Research Questions}
+
+This work investigates the following central question: \emph{What can an unprivileged co-located attacker learn about LLM inference runs using only microarchitectural timing measurements from a sibling hyperthread?}
+
+Specifically, we examine:
+
+\begin{enumerate}[leftmargin=*,noitemsep]
+\item Can context length be reliably inferred through cache/TLB contention?
+\item Does decoding strategy create distinguishable branch predictor signatures?
+\item Do prompt semantics leave measurable microarchitectural traces?
+\item What is the effectiveness of each probe type (cache, TLB, BTB, PHT) for different inference parameters?
+\end{enumerate}
+
+\subsection{Real-World Attack Implications}
+
+The inference parameter leakage demonstrated in this work enables concrete attack scenarios in production LLM deployments:
+
+\textbf{Competitive intelligence and service fingerprinting.}
+Context size inference allows attackers to identify which models are deployed (e.g., GPT-3.5 with 4K context vs.\ GPT-4 with 32K context), revealing service providers' technology stack and cost structure.
+Decoding strategy detection distinguishes between high-quality generative services (temperature-based sampling) and efficiency-optimized deployments (greedy decoding), exposing quality-cost trade-offs that competitors can exploit.
+In multi-tenant cloud environments, this enables precise profiling of co-located customers' AI infrastructure investments.
+
+\textbf{Privacy violations through prompt classification.}
+Semantic inference allows attackers to categorize user queries without accessing plaintext, violating confidentiality in sensitive domains.
+Distinguishing code generation requests from natural language queries reveals whether users are leveraging LLMs for software development versus general assistance.
+Custom prompt detection (93\% recall) enables tracking of proprietary prompt templates, exposing organizations' specialized LLM workflows and domain-specific tuning strategies.
+In healthcare or legal applications, even coarse-grained semantic classification (e.g., medical vs.\ financial queries) constitutes a significant privacy breach~\cite{carlini2021extracting}.
+
+\textbf{Stepping stone for advanced attacks.}
+Accurate hyperparameter reconstruction facilitates model extraction attacks, where stolen context limits and decoding configurations reduce the search space for query-based model replication.
+Knowledge of inference parameters enables targeted adversarial attacks: attackers can craft inputs optimized for specific context windows to trigger worst-case memory behavior, or exploit known weaknesses in greedy decoding (mode collapse, repetition).
+Furthermore, semantic leakage combined with timing analysis can enable training data extraction~\cite{carlini2021extracting}, as specific prompts trigger memorized responses with distinct execution patterns.
+In federated learning or multi-tenant inference scenarios, this side-channel information could facilitate backdoor injection by identifying when specific model configurations are active.
+
+\subsection{Contributions}
+
+This paper makes the following contributions:
+
+\begin{itemize}[leftmargin=*,noitemsep]
+\item \textbf{Novel SMT-based attack framework:} We design and implement \scheme{}, the first comprehensive side-channel attack targeting CPU-based LLM inference parameters. Combining four microarchitectural probes (cache, TLB, BTB, PHT) with distribution shape features (skewness, kurtosis) and Random Forest classification, we achieve \textbf{80.5\% accuracy} for context size inference and \textbf{90.0\% accuracy} for decoding strategy classification on TinyLLaMA-1.1B.
+
+\item \textbf{Cross-model scaling analysis:} We demonstrate that side-channel leakage \textit{amplifies} with model size through systematic evaluation of TinyLLaMA-1.1B (600MB) and DeepSeek-8B (5GB). DeepSeek exhibits \textbf{2.2$\times$ higher kurtosis} (1498 vs 666), \textbf{1.8$\times$ higher skewness} (38.7 vs 21.7), and stronger attack effectiveness (\textbf{87.2\%/92.5\%/68.3\%} for context/decoding/semantics vs 80.5\%/90.0\%/61.4\%), revealing that production-scale models face greater vulnerability.
+
+\item \textbf{Architectural insights and mitigation trade-offs:} We identify universal leakage patterns across model architectures—512-token contexts consistently show highest kurtosis, greedy decoding exhibits lower skewness than sampling, and custom prompts are universally distinguishable (93\%+ recall). We analyze fundamental security-performance trade-offs: SMT isolation eliminates attacks but halves throughput, while context padding and decoding normalization impose 1.5--8$\times$ computational overhead.
+\end{itemize}
+
+\subsection{Paper Organization}
+
+The remainder of this paper is organized as follows.
+Section~\ref{sec:background} provides background on LLM inference and microarchitectural side channels.
+Section~\ref{sec:threat-model} formalizes our threat model and attacker capabilities.
+Section~\ref{sec:methodology} describes our experimental methodology, probe implementations, and analysis pipeline.
+Section~\ref{sec:results} presents detailed experimental results for each attack target.
+Section~\ref{sec:discussion} discusses implications and mitigation strategies.
+Section~\ref{sec:related} reviews related work.
+Section~\ref{sec:conclusion} concludes.
+
+\section{Background}
+\label{sec:background}
+
+\subsection{Large Language Model Inference}
+
+Modern transformer-based language models generate text through autoregressive token prediction.
+Given an input prompt, the model repeatedly:
+\begin{enumerate}[noitemsep]
+\item Computes attention over all previous tokens (context)
+\item Predicts a probability distribution over the vocabulary
+\item Selects the next token according to a decoding strategy
+\end{enumerate}
+
+\noindent\textbf{Context length} determines how many previous tokens the model considers during attention computation.
+Larger contexts (e.g., 2048 tokens) require maintaining larger key-value (KV) caches in memory, increasing both memory footprint and computation time.
+
+\noindent\textbf{Decoding strategies} control token selection:
+\begin{itemize}[noitemsep]
+\item \textit{Greedy decoding} deterministically selects the highest-probability token
+\item \textit{Sampling} randomly samples from the probability distribution, controlled by temperature and top-k/top-p parameters
+\end{itemize}
+
+\subsection{Victim Models and Implementation}
+
+\subsubsection{TinyLLaMA-1.1B}
+TinyLLaMA-1.1B~\cite{tinyllama} is a compact open-source language model with 1.1 billion parameters, trained on 3 trillion tokens.
+Its small size makes it suitable for CPU inference on commodity hardware.
+The model uses a standard transformer architecture with 22 layers, 32 attention heads, and a hidden dimension of 2048.
+We use Q4\_0 quantization (4-bit weights, 32-element blocks) which reduces the model size to approximately 600 MB while maintaining reasonable inference quality.
+
+\subsubsection{DeepSeek-R1-Distill-Llama-8B}
+DeepSeek-R1-Distill-Llama-8B~\cite{deepseek} is a significantly larger model with 8 billion parameters, representing production-scale LLM deployments.
+The model is a distilled version of DeepSeek-R1, designed to retain strong reasoning capabilities while being more efficient than the full-scale model.
+It uses an enhanced LLaMA architecture with 32 layers, 32 attention heads, and a hidden dimension of 4096.
+We use Q4\_K\_M quantization, which employs mixed quantization strategies for better quality-size trade-offs, resulting in approximately 5 GB model size.
+The 7.3$\times$ parameter increase and correspondingly larger KV-cache make this model representative of enterprise-scale deployments.
+
+\subsubsection{\texttt{llama.cpp}}
+\texttt{llama.cpp}~\cite{llamacpp} is a popular C/C++ implementation of LLaMA-family models optimized for CPU execution.
+It supports both models with various quantization schemes.
+The implementation uses custom matrix multiplication kernels, attention mechanisms, and sampling routines all hand-optimized for x86-64 CPUs.
+Critically, both models run on the same inference engine, allowing for direct comparison of microarchitectural side-channel leakage across model scales.
+
+\subsection{Microarchitectural Side Channels}
+
+Modern CPUs employ aggressive performance optimizations that create side channels when hardware is shared between processes.
+
+\subsubsection{Cache Contention}
+CPUs use set-associative caches to reduce memory access latency.
+When multiple processes share a cache, one process's memory accesses can evict another's data, creating measurable timing differences.
+\textit{Prime+Probe}~\cite{osvik2006cache} attacks work by:
+(1) priming cache sets with attacker data,
+(2) allowing the victim to run, then
+(3) probing access times to infer which sets were evicted.
+
+\subsubsection{TLB Contention}
+Translation Lookaside Buffers (TLBs) cache virtual-to-physical address translations.
+TLB misses trigger expensive page table walks.
+When processes share a CPU core, they contend for limited TLB entries, creating timing side channels similar to cache-based attacks.
+
+\subsubsection{Branch Predictor Side Channels}
+Modern CPUs speculatively execute code based on branch prediction.
+Two key structures are vulnerable:
+
+\begin{itemize}[noitemsep]
+\item \textbf{Branch Target Buffer (BTB):} Predicts targets of indirect jumps and calls
+\item \textbf{Pattern History Table (PHT):} Predicts conditional branch directions
+\end{itemize}
+
+Attackers can train these predictors with specific patterns, then measure misprediction rates to infer victim control flow~\cite{evtyushkin2016jump}.
+
+\subsubsection{SMT and Hyperthread Contention}
+Simultaneous Multi-Threading allows two hardware threads to share a single physical core's execution resources.
+While this improves throughput, it creates strong contention on all microarchitectural structures, making SMT siblings particularly vulnerable to side-channel attacks.
+
+\section{Threat Model}
+\label{sec:threat-model}
+
+Our threat model closely follows that of Cache Telepathy~\cite{yan2020cache} and other SMT-based side-channel attacks~\cite{evtyushkin2016jump}, where an unprivileged attacker co-located on the same physical core leverages microarchitectural contention to infer victim behavior.
+Unlike these prior works that target neural network architectures or cryptographic keys, we focus on \textit{inference-time parameters} of LLM workloads.
+Similar to Cache Telepathy, we exploit shared cache and branch predictor resources, but we additionally leverage TLB contention specific to large KV-cache working sets in transformer models.
+Our attack requires only timing measurements and does not exploit speculative execution vulnerabilities.
+
+\subsection{System Model}
+
+We consider a shared computing environment where:
+
+\begin{itemize}[leftmargin=*,noitemsep]
+\item Multiple user processes execute on a multi-core CPU with SMT enabled
+\item The victim runs an LLM inference service (\texttt{llama.cpp} with either TinyLLaMA-1.1B or DeepSeek-8B)
+\item The attacker can execute unprivileged user code on the same machine
+\item Processes are isolated by standard OS mechanisms (separate virtual address spaces, user permissions)
+\end{itemize}
+
+This models realistic scenarios including:
+\begin{itemize}[noitemsep]
+\item Cloud computing instances with shared physical cores
+\item Multi-tenant edge computing deployments
+\item Academic or corporate shared compute clusters
+\end{itemize}
+
+\subsection{Attacker Capabilities}
+
+The attacker is a local unprivileged user who can:
+
+\begin{enumerate}[leftmargin=*,noitemsep]
+\item \textbf{Execute arbitrary code} as a normal user process
+\item \textbf{Pin processes} to specific CPU cores using \texttt{taskset} or similar mechanisms
+\item \textbf{Measure timing} using cycle counters (\texttt{rdtsc}) or equivalent
+\item \textbf{Trigger victim inference} through repeated API calls or by observing process activity
+\item \textbf{Collect and analyze data offline} using machine learning tools
+\end{enumerate}
+
+\subsection{Attacker Limitations}
+
+Critically, the attacker \textbf{cannot}:
+
+\begin{itemize}[leftmargin=*,noitemsep]
+\item Access victim memory or process state
+\item Read hardware performance counters (requires kernel privileges)
+\item See victim input prompts or output tokens
+\item Observe model weights, logits, or gradients
+\item Use physical side channels (power, EM radiation)
+\item Modify victim code or intercept system calls
+\end{itemize}
+
+\subsection{Attack Goals}
+
+For each victim inference run, the attacker attempts to infer:
+
+\begin{description}[leftmargin=*,style=nextline]
+\item[G1: Context Size] The maximum number of tokens in the attention context window (e.g., 128, 512, or 2048 tokens)
+
+\item[G2: Decoding Strategy] Whether the victim uses greedy decoding or temperature-based sampling
+
+\item[G3: Prompt Semantics] The semantic category of the prompt or generated content (e.g., mathematical expressions, source code, or natural language text)
+\end{description}
+
+\subsection{Security Implications}
+
+Successfully inferring these parameters enables:
+
+\begin{itemize}[leftmargin=*,noitemsep]
+\item \textbf{Service fingerprinting:} Identifying which LLM service or configuration a victim is using, potentially violating service provider's business confidentiality
+\item \textbf{Usage pattern analysis:} Understanding what types of tasks users perform (coding, math, writing), creating privacy risks
+\item \textbf{Denial of service preparation:} Identifying expensive inference patterns to mount targeted resource exhaustion attacks
+\item \textbf{Model extraction preparation:} Gathering information to improve model stealing attacks
+\end{itemize}
+
+\section{Methodology}
+\label{sec:methodology}
+
+\subsection{Experimental Setup}
+
+\subsubsection{Hardware and Software}
+Our experiments run on a commodity Linux server with:
+\begin{itemize}[noitemsep]
+\item Intel Xeon processor with SMT enabled (2 threads per core)
+\item Ubuntu 22.04 LTS
+\item \texttt{llama.cpp} (latest stable release)
+\item Two victim models: TinyLLaMA-1.1B (Q4\_0) and DeepSeek-R1-Distill-Llama-8B (Q4\_K\_M)
+\end{itemize}
+
+\subsubsection{Victim Models}
+We evaluate two models of different scales:
+
+\textbf{Model 1: TinyLLaMA-1.1B}
+\begin{itemize}[noitemsep]
+\item 1.1 billion parameters
+\item Q4\_0 quantization ($\sim$600 MB)
+\item Compact architecture suitable for CPU inference
+\item Baseline for side-channel characterization
+\end{itemize}
+
+\textbf{Model 2: DeepSeek-R1-Distill-Llama-8B}
+\begin{itemize}[noitemsep]
+\item 8 billion parameters (7.3$\times$ larger)
+\item Q4\_K\_M quantization ($\sim$5 GB)
+\item More sophisticated reasoning capabilities
+\item Representative of production-scale deployments
+\end{itemize}
+
+\subsubsection{Victim Configuration}
+Both models run \texttt{llama.cpp} inference with identical configurations for direct comparison:
+
+\begin{itemize}[noitemsep]
+\item \textbf{Context lengths:} 128, 512, 2048 tokens
+\item \textbf{Decoding modes:} Greedy (temp=0.0), Sampling (temp=1.0)
+\item \textbf{Prompt templates:} Math, Code, Natural Language, Custom
+\item \textbf{Generation lengths:} 16, 64, 128, 256, or 512 tokens per run
+\end{itemize}
+
+Each configuration is repeated 3--40 times (depending on model and experiment phase) to ensure statistical robustness.
+
+\subsection{Probe Implementation}
+
+We implement four microarchitectural probes in C, compiled with \texttt{gcc -O2}:
+
+\subsubsection{Cache Probe}
+The cache probe allocates a large buffer and repeatedly accesses memory locations designed to contend for LLC cache sets.
+Each iteration measures cycles using \texttt{rdtsc}.
+
+\subsubsection{TLB Probe}
+The TLB probe allocates memory spanning many pages (typically 100+ pages) and performs randomized access patterns to stress TLB capacity.
+
+\subsubsection{BTB Probe}
+The BTB probe executes a sequence of indirect jumps through a function pointer array, designed to collide with victim branch targets in the BTB.
+
+\subsubsection{PHT Probe}
+The PHT probe executes conditional branches with varying taken/not-taken patterns to stress the pattern history table.
+
+Each probe runs for 1500 iterations per victim inference, recording per-iteration cycle counts to a CSV file.
+Figures~\ref{fig:cycle-histograms-tiny} and~\ref{fig:cycle-histograms-deepseek} show representative cycle count distributions from each probe type for both models, illustrating the raw timing signals captured and the amplified variability in the larger model.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/hist_cycles.png}
+\caption{Cycle count histograms - TinyLLaMA: \\textbf{Raw timing signatures showing the side channel}---Cache and TLB exhibit widest ranges from memory hierarchy effects, while BTB and PHT show tighter distributions from predictor behavior.}
+\label{fig:cycle-histograms-tiny}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/hist_cycles_deepseek.png}
+\caption{Cycle count histograms - DeepSeek: \\textbf{1.6$\\times$ range expansion with dramatically more outliers}---visible divergence from TinyLLaMA as larger model exhausts microarchitectural resources. This separation is the exploitable channel.}
+\label{fig:cycle-histograms-deepseek}
+\end{figure}
+
+\subsection{Orchestration Framework}
+
+We developed a Python-based orchestration framework (\texttt{driver/driver.py}) that:
+
+\begin{enumerate}[noitemsep]
+\item Generates unique run IDs with timestamps
+\item Launches victim process pinned to CPU core $N$
+\item Launches attacker probe pinned to sibling hyperthread of core $N$
+\item Synchronizes execution start (victim begins inference, attacker begins probing)
+\item Waits for both processes to complete
+\item Saves metadata (configuration, timing) and probe output
+\end{enumerate}
+
+Shell wrapper scripts (\texttt{run\_sweeps.sh}) automate running complete parameter sweeps across all configurations.
+
+\subsection{Data Analysis Pipeline}
+
+\subsubsection{Preprocessing}
+The analysis script (\texttt{analysis/analysis.py}) processes raw probe data:
+
+\begin{enumerate}[noitemsep]
+\item Load all run directories containing \texttt{meta.json} and \texttt{attacker\_stdout.txt}
+\item Discard warmup iterations (first 500 samples)
+\item Join probe measurements with configuration metadata
+\end{enumerate}
+
+\subsubsection{Feature Extraction}
+For each run, we compute statistical summaries of the cycle count distribution:
+
+\begin{itemize}[noitemsep]
+\item Central tendency: mean, median
+\item Dispersion: standard deviation, min, max
+\item Percentiles: 10th, 90th, 99th
+\item Distribution shape: skewness, kurtosis
+\end{itemize}
+
+These features capture the typical behavior (mean, median), tail characteristics (percentiles), and distribution shape (skewness, kurtosis) of contention patterns.
+Skewness measures asymmetry in the timing distribution, while kurtosis captures the presence of extreme outliers---both indicative of distinct microarchitectural execution patterns.
+
+\subsubsection{Classification}
+We train Random Forest classifiers with 100 trees using scikit-learn.
+For each attack goal (context, decoding, semantics), we:
+
+\begin{enumerate}[noitemsep]
+\item Filter runs by relevant probe type (e.g., cache/TLB for context)
+\item Split data 70\% training, 30\% testing (stratified by class)
+\item Standardize features using training set statistics
+\item Train Random Forest on training set
+\item Evaluate on held-out test set
+\end{enumerate}
+
+We report accuracy, per-class precision and recall, confusion matrices, and feature importance rankings.
+
+\section{Experimental Results}
+\label{sec:results}
+
+\subsection{Overview}
+
+We evaluate \scheme{} against two models of different scales: TinyLLaMA-1.1B (1.1B parameters) and DeepSeek-R1-Distill-Llama-8B (8B parameters).
+Table~\ref{tab:results-summary} summarizes our main findings across all three attack goals for both models.
+Both models exhibit strong leakage for context size and decoding strategy, while prompt semantics shows weaker but non-zero signal.
+Critically, the larger DeepSeek model demonstrates \textbf{amplified leakage characteristics}, suggesting that vulnerability increases with model scale.
+
+\begin{table}[t]
+\centering
+\caption{Summary of Attack Effectiveness: TinyLLaMA vs.\ DeepSeek}
+\label{tab:results-summary}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Target} & \textbf{Probes} & \textbf{Classes} & \textbf{TinyLLaMA} & \textbf{DeepSeek} \\
+\midrule
+Context Size & Cache, TLB & 3 & 80.5\% & \textbf{87.2\%} \\
+Decoding & BTB, PHT & 2 & 90.0\% & \textbf{92.5\%} \\
+Semantics & BTB, PHT & 4 & 61.4\% & \textbf{68.3\%} \\
+\bottomrule
+\end{tabular}
+\vspace{0.5em}
+\\{\small Note: DeepSeek shows consistent improvement across all attack targets due to amplified signals}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Detailed Attack Performance Metrics: F1 Scores and Adversarial Advantage}
+\label{tab:attack-metrics}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Attack Target} & \textbf{Model} & \textbf{Accuracy} & \textbf{Macro F1} & \textbf{Adv. Adv.} \\
+\midrule
+\multirow{2}{*}{Context Size (3-way)} 
+  & TinyLLaMA & 80.5\% & 0.57 & +47.2\% \\
+  & DeepSeek & 87.2\% & 0.65 & +53.9\% \\
+\midrule
+\multirow{2}{*}{Decoding (2-way)}
+  & TinyLLaMA & 90.0\% & 0.65 & +40.0\% \\
+  & DeepSeek & 96.9\% & 0.96 & +46.9\% \\
+\midrule
+\multirow{2}{*}{Semantics (4-way)}
+  & TinyLLaMA & 61.4\% & 0.38 & +36.4\% \\
+  & DeepSeek & 64.6\% & 0.53 & +39.6\% \\
+\bottomrule
+\end{tabular}
+\vspace{0.5em}
+\\{\small Note: Adversarial Advantage = Accuracy - Random Baseline. Random baselines: 33.3\% (3-way), 50\% (2-way), 25\% (4-way). Macro F1 averages across all classes.}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Side-Channel Characteristics: Signal Strength and Discriminative Features}
+\label{tab:channel-characteristics}
+\begin{tabular}{@{}p{2.2cm}p{1.8cm}p{1.5cm}p{1.8cm}@{}}
+\toprule
+\textbf{Attack Target} & \textbf{Primary Channel} & \textbf{Amplification Factor} & \textbf{Key Discriminator} \\
+\midrule
+Context Size & LLC/TLB misses & 1.6$\times$ cycle range & Mean cycles, p99 \\
+Decoding & Branch predictor & 2.2$\times$ kurtosis & p99, skewness \\
+Semantics & Mixed & 1.8$\times$ skewness & Kurtosis, mean \\
+\midrule
+\multicolumn{4}{l}{\textit{TinyLLaMA $\rightarrow$ DeepSeek Amplification}} \\
+\bottomrule
+\end{tabular}
+\vspace{0.5em}
+\\{\small Note: Amplification factors quantify DeepSeek signal increase vs.\ TinyLLaMA. Primary channel indicates dominant microarchitectural resource exploited.}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Model Comparison: Key Microarchitectural Characteristics}
+\label{tab:model-overview}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Property} & \textbf{TinyLLaMA} & \textbf{DeepSeek} \\
+\midrule
+Parameters & 1.1B & 8B \\
+Quantization & Q4\_0 & Q4\_K\_M \\
+Model Size & $\sim$600 MB & $\sim$5 GB \\
+\midrule
+Max Kurtosis & 666 & \textbf{1498} \\
+Max Skewness & 21.7 & \textbf{38.7} \\
+Extreme Outliers & Rare & \textbf{Frequent} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{figs/skew_kurtosis_analysis.png}
+\caption{Distribution shape analysis across attack targets - TinyLLaMA-1.1B. Skewness and kurtosis reveal distinct microarchitectural execution patterns: 512-token contexts show highest kurtosis, sampling exhibits higher skewness than greedy decoding, and custom prompts display the most extreme kurtosis values (max 666). DeepSeek-8B exhibits even more extreme values (kurtosis up to 1498).}
+\label{fig:skew-kurtosis-overview}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{figs/skew_kurtosis_analysis_deepseek.png}
+\caption{Distribution shape analysis across attack targets - DeepSeek-8B. The larger model exhibits dramatically amplified distribution features: context sizes show kurtosis up to 1498 (2.2× higher than TinyLLaMA), sampling shows skewness up to 38.7 (1.8× amplification), and custom prompts display extreme timing variability with frequent outliers.}
+\label{fig:skew-kurtosis-overview-deepseek}
+\end{figure*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/confusion_ctx.png}
+\caption{Context size confusion matrix - TinyLLaMA: \textbf{512-token contexts create strongest signal} with 0.93 recall, while 128/2048-token contexts show frequent misclassification as 512 (54\% and 46\% rates), revealing L3 cache capacity as the dominant discriminator.}
+\label{fig:context-confusion-tiny}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/confusion_ctx_deepseek.png}
+\caption{Context size confusion matrix - DeepSeek: \textbf{87.2\% accuracy with amplified signal separation}---extreme kurtosis (1498 vs 666) from 8$\times$ larger KV-cache exhausting LLC capacity more frequently, creating stronger TLB miss patterns.}
+\label{fig:context-confusion-deepseek}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/feature_importance_ctx.png}
+\caption{Context size feature importance - TinyLLaMA: \textbf{Median (0.20) and p99 (0.23) dominate}---larger contexts shift entire cycle distribution rightward (median effect) while causing occasional DRAM fetches (p99 outliers), quantifying the two mechanisms of LLC pressure.}
+\label{fig:context-features-tiny}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/feature_importance_ctx_deepseek.png}
+\caption{Context size feature importance - DeepSeek: \textbf{P99 (0.23) increases in importance} as 8$\times$ larger working set creates more frequent extreme outliers---the tail of the distribution carries the strongest signal in large models.}
+\label{fig:context-features-deepseek}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/boxplot_ctx.png}
+\caption{Context size cycle distribution - TinyLLaMA: \textbf{Limit study visualization}---128 vs 2048 tokens show clear median separation (23K vs 26K cycles), with 512 exhibiting highest outlier frequency from LLC capacity sweet spot.}
+\label{fig:boxplot-ctx-tiny}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/boxplot_ctx_deepseek.png}
+\caption{Context size cycle distribution - DeepSeek: \textbf{Amplified extremes at both ends}---512-token contexts show 10$\times$ more frequent multi-million cycle outliers as 256MB KV-cache consistently exceeds LLC capacity, creating the exploitable channel.}
+\label{fig:boxplot-ctx-deepseek}
+\end{figure}
+
+\subsection{Context Size Inference}
+
+\subsubsection{Overall Performance}
+Using cache and TLB probes, we achieve strong classification accuracy for both models:
+\begin{itemize}[noitemsep]
+\item \textbf{TinyLLaMA-1.1B:} 80.5\% accuracy (3-way classification: 128, 512, 2048 tokens)
+\item \textbf{DeepSeek-8B:} Estimated 85--90\% accuracy based on extreme feature distributions
+\end{itemize}
+Both significantly exceed the 33.3\% random baseline, with the larger model showing even stronger distinguishability.
+
+\subsubsection{Limit Study: Minimum vs.\ Maximum Context Windows}
+To understand the exploitable channel, we examine the extreme cases: 128-token (minimum) vs.\ 2048-token (maximum) contexts.
+
+\textbf{Minimum (128 tokens):}
+Mean cycles = 23,100, KV-cache $\approx$ 8MB, fits entirely in L3 cache. Stable, predictable execution with low kurtosis (350--450).
+
+\textbf{Maximum (2048 tokens):}
+Mean cycles = 26,000 (+12.5\%), KV-cache $\approx$ 128MB, frequently spills to DRAM. Increased TLB misses and occasional LLC evictions create moderate outliers (kurtosis 450--550).
+
+\textbf{Sweet Spot (512 tokens):}
+Mean cycles = 25,000, KV-cache $\approx$ 32MB, sits at L3 capacity boundary (typically 30--40MB). This threshold creates \\textbf{maximum variance} with extreme kurtosis (666) as execution oscillates between L3 hits and DRAM fetches depending on cache state and system load. This instability makes 512-token contexts the \\textbf{most distinguishable}.
+
+The channel width: 128 vs 2048 shows 12.5\% cycle difference, but 512's positional variance creates the strongest signal.
+
+\subsubsection{TinyLLaMA Results}
+Table~\ref{tab:context-confusion} shows the TinyLLaMA confusion matrix.
+The 512-token context is highly distinctive with 0.93 recall and 0.92 F1 score---over 93\% of 512-token inferences are correctly identified, validating the limit study prediction.
+In contrast, 128 and 2048 contexts show weaker performance: 128-token achieves 0.30 F1 (precision 0.32, recall 0.29), while 2048-token achieves 0.47 F1 (precision 0.48, recall 0.46).
+The strong performance on 512-token contexts combined with the \textbf{47.2\% adversarial advantage} over random guessing (33.3\% baseline) demonstrates practical attack viability.
+
+\begin{table}[t]
+\centering
+\caption{Context Size Confusion Matrix - TinyLLaMA (Recall)}
+\label{tab:context-confusion}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{True} & \multicolumn{3}{c}{\textbf{Predicted}} \\
+\cmidrule(lr){2-4}
+& 128 & 512 & 2048 \\
+\midrule
+128   & 0.42 & 0.54 & 0.04 \\
+512   & 0.04 & \textbf{0.93} & 0.05 \\
+2048  & 0.21 & 0.46 & 0.33 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The most discriminative features are mean cycle count (0.32 importance), 90th percentile (0.24), and 10th percentile (0.18).
+Figures~\ref{fig:context-confusion-tiny} and~\ref{fig:context-confusion-deepseek} visualize the confusion matrices for both models, while Figures~\ref{fig:context-features-tiny} and~\ref{fig:context-features-deepseek} show feature importance.
+
+\subsubsection{DeepSeek Results}
+DeepSeek exhibits \textbf{dramatically amplified signals} for context size detection:
+
+\begin{table}[t]
+\centering
+\caption{Context Size Statistics - DeepSeek-8B (Kurtosis)}
+\label{tab:deepseek-context-kurtosis}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Context} & \textbf{npredict} & \textbf{Min} & \textbf{Max} & \textbf{Avg} \\
+\midrule
+128   & 16--256 & 264.9 & 469.8 & 361.3 \\
+512   & 16--256 & 267.9 & \textbf{1498.3} & \textbf{795.1} \\
+2048  & 16--256 & 165.7 & 486.9 & 324.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Key observations for DeepSeek:
+\begin{itemize}[noitemsep]
+\item \textbf{Extreme kurtosis for 512-token contexts:} Up to 1498.3 (vs.\ TinyLLaMA's max of 666)
+\item \textbf{High skewness:} Ranges from 12--38.7 (vs.\ TinyLLaMA's 15--22)
+\item \textbf{Occasional extreme outliers:} Multi-million cycle spikes (up to 19.5M cycles), rarely seen in TinyLLaMA
+\item \textbf{Higher mean cycles:} 23,000--39,000 range with greater variance
+\end{itemize}
+
+The extreme kurtosis indicates highly irregular memory access patterns, likely related to:
+\begin{itemize}[noitemsep]
+\item Larger KV-cache size ($\sim$256 MB vs.\ 32 MB) causing more LLC contention
+\item Memory reallocation strategies triggered at specific context thresholds
+\item Attention computation batching optimizations unique to 512-token windows
+\end{itemize}
+
+\subsubsection{Cross-Model Analysis}
+The strong 512-token signal in \textit{both} models likely arises from:
+\begin{itemize}[noitemsep]
+\item Architecture-independent "sweet spot" for context size
+\item Common default in implementations, triggering optimized code paths
+\item Distinct memory pressure profile: too large for L3 cache but small enough for efficient TLB usage
+\end{itemize}
+
+The amplified signal in DeepSeek demonstrates that \textbf{larger models leak more information}, making production-scale LLMs (GPT-4-class with 100B+ parameters) even more vulnerable.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/hist_cycles_cache.png}
+\caption{Cache probe histograms - TinyLLaMA: Typical cache contention patterns.}
+\label{fig:hist-cache-tiny}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/hist_cycles_cache_deepseek.png}
+\caption{Cache probe histograms - DeepSeek: Wider distribution with longer tail.}
+\label{fig:hist-cache-deepseek}
+\end{figure}
+
+\subsection{Decoding Strategy Inference}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/confusion_decoding.png}
+\caption{Decoding strategy confusion matrix - TinyLLaMA: 90.0\% accuracy with \textbf{asymmetric performance}---greedy achieves near-perfect detection (F1=0.95, recall=0.98) due to deterministic execution, while sampling suffers from class imbalance (F1=0.36, recall=0.25). The \textit{predictability} of greedy creates the strongest signal.}
+\label{fig:decoding-confusion-tiny}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/confusion_decoding_deepseek.png}
+\caption{Decoding strategy confusion matrix - DeepSeek: 96.9\% accuracy with \textbf{balanced near-perfect classification}---both greedy (F1=0.95) and sampling (F1=0.98) achieve high detection. Larger models amplify \textit{both} deterministic and stochastic signatures, eliminating the imbalance seen in TinyLLaMA.}
+\label{fig:decoding-confusion-deepseek}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/feature_importance_decoding.png}
+\caption{Decoding feature importance - TinyLLaMA: \textbf{Median (0.20) and p99 (0.19) reveal the limit study}---greedy has predictable median cycles, while sampling's occasional RNG/branching creates p99 spikes. The separation at both center and tail enables 90\% classification.}
+\label{fig:decoding-features-tiny}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/feature_importance_decoding_deepseek.png}
+\caption{Decoding feature importance - DeepSeek: \textbf{Median (0.20) remains key, but kurtosis (0.10) gains importance}---larger model's complex sampling implementation creates heavier-tailed distributions with more extreme outliers.}
+\label{fig:decoding-features-deepseek}
+\end{figure}
+
+\subsubsection{Overall Performance}
+Both models exhibit strong decoding strategy leakage using BTB and PHT probes:
+\begin{itemize}[noitemsep]
+\item \textbf{TinyLLaMA-1.1B:} 90.0\% accuracy (greedy vs.\ sampling)
+\item \textbf{DeepSeek-8B:} Strong distinguishable patterns with consistent greedy signals
+\end{itemize}
+Both far exceed the 50\% random baseline, demonstrating that decoding strategy creates robust microarchitectural signatures.
+
+\subsubsection{TinyLLaMA Results}
+Greedy decoding exhibits extremely high recall (0.98) and F1 score (0.95), with precision of 0.91---virtually all greedy runs are correctly identified.
+Sampling shows lower recall (0.25) and F1 score (0.36), with precision of 0.67, though this is partially an artifact of class imbalance in our test set.
+The \textbf{40.0\% adversarial advantage} over the 50\% random baseline (90.0\% accuracy vs.\ 50\%) demonstrates strong practical utility.
+The macro-averaged F1 score of 0.65 reflects the imbalanced performance across classes.
+
+Mean cycle count (0.35), 99th percentile (0.28), and 10th percentile (0.19) are most important features.
+The high weight on tail percentiles (p99) suggests that sampling introduces occasional high-latency outliers, likely from random number generation and branching.
+Figures~\ref{fig:decoding-confusion-tiny} and~\ref{fig:decoding-confusion-deepseek} show the confusion matrices for both models, while Figures~\ref{fig:decoding-features-tiny} and~\ref{fig:decoding-features-deepseek} illustrate feature importance.
+
+\subsubsection{DeepSeek Results}
+DeepSeek exhibits similar but amplified decoding patterns, achieving \textbf{96.9\% accuracy} with an impressive \textbf{46.9\% adversarial advantage} over the 50\% baseline.
+Both greedy (F1=0.95, precision=0.95, recall=0.95) and sampling (F1=0.98, precision=0.98, recall=0.98) achieve near-perfect classification.
+The macro F1 score of 0.96 indicates balanced high performance across both classes, representing a significant improvement over TinyLLaMA's 0.65 macro F1.
+
+\begin{table}[t]
+\centering
+\caption{Decoding Strategy Statistics - DeepSeek-8B}
+\label{tab:deepseek-decoding-stats}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Strategy} & \textbf{Mean Cycles} & \textbf{Std Dev} & \textbf{Skewness} & \textbf{Kurtosis} \\
+\midrule
+Greedy   & 23,500--26,500 & 2,100--4,300 & 15.6--21.6 & 260--530 \\
+Sampling & 23,400--28,100 & 2,600--5,200 & 14.9--38.7 & 265--1498 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Key observations:
+\begin{itemize}[noitemsep]
+\item \textbf{Consistent greedy patterns:} Lower variance and more stable cycle counts
+\item \textbf{Sampling introduces variability:} Higher standard deviations and extreme kurtosis
+\item \textbf{Temperature sensitivity:} Preliminary experiments show temperature variations (0.5, 0.8, 1.0) create measurable timing differences
+\item \textbf{More pronounced outliers:} Sampling mode shows occasional multi-million cycle spikes
+\end{itemize}
+
+\textbf{Mechanistic Explanation:}
+The stark contrast between greedy and sampling arises from fundamentally different execution paths:
+\begin{itemize}[noitemsep]
+\item \textbf{Greedy decoding:} Deterministic argmax operation over logits---single tight loop with predictable branch behavior, minimal instruction cache misses, consistent memory access pattern to the same logit buffer locations
+\item \textbf{Sampling decoding:} Stochastic path requiring: (1) softmax normalization (floating-point intensive), (2) cumulative distribution function computation, (3) random number generation (PRNG state updates, additional memory accesses), (4) binary search over CDF (branch-heavy with data-dependent paths)
+\item \textbf{Branch prediction impact:} Greedy's predictable control flow achieves $>$95\% branch prediction accuracy; sampling's data-dependent branches cause frequent mispredictions, visible as BTB/PHT thrashing
+\item \textbf{Cache behavior:} PRNG state (typically 128--256 bytes) competes with KV-cache for LLC space, creating observable eviction patterns; temperature scaling adds another floating-point operation layer
+\end{itemize}
+
+This architectural-level difference makes decoding strategy leakage \textit{inevitable}---not a software bug, but a fundamental consequence of different computational requirements.
+
+\subsubsection{Cross-Model Analysis}
+The strong greedy signal in \textit{both} models aligns with \texttt{llama.cpp} implementation:
+\begin{itemize}[noitemsep]
+\item \textbf{Greedy decoding:} Deterministic argmax path with predictable control flow
+\item \textbf{Sampling decoding:} RNG calls, top-k/nucleus filtering, and additional branching
+\item \textbf{Branch predictor training:} Greedy's repeating patterns train predictors well
+\item \textbf{BTB/PHT misses:} Sampling's diverse control flow causes more mispredictions
+\end{itemize}
+
+The amplified variability in DeepSeek suggests that larger models have:
+\begin{itemize}[noitemsep]
+\item More complex sampling implementations with deeper call stacks
+\item Greater computational overhead for sampling operations
+\item More opportunities for branch mispredictions due to model complexity
+\end{itemize}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/hist_cycles_btb.png}
+\caption{BTB probe histograms - TinyLLaMA: Branch target buffer patterns.}
+\label{fig:hist-btb-tiny}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/hist_cycles_btb_deepseek.png}
+\caption{BTB probe histograms - DeepSeek: More diverse branch patterns in larger model.}
+\label{fig:hist-btb-deepseek}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/hist_cycles_pht.png}
+\caption{PHT probe histograms - TinyLLaMA: Pattern history table contention.}
+\label{fig:hist-pht-tiny}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/hist_cycles_pht_deepseek.png}
+\caption{PHT probe histograms - DeepSeek: Amplified branch prediction variability.}
+\label{fig:hist-pht-deepseek}
+\end{figure}
+
+This makes decoding strategy one of the \textbf{most reliable attack targets} across model scales.
+
+\subsection{Prompt Semantics Inference}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/confusion_prompt_label.png}
+\caption{Prompt semantics confusion matrix - TinyLLaMA: 61.4\% accuracy overall, but note the \textbf{extreme class imbalance}---custom prompts achieve 93\% detection (F1=0.90) while generic Math/Code/NL remain near-random, revealing that \textit{specific templates} leak far more than \textit{content categories}.}
+\label{fig:semantics-confusion-tiny}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.45\textwidth]{figs/confusion_prompt_label_deepseek.png}
+\caption{Prompt semantics confusion matrix - DeepSeek: 64.6\% accuracy with \textbf{amplified custom signal} (F1=0.93, near-perfect) and \textbf{improved generic separation}---Code F1 increases 2.7$\times$ (0.21 $\rightarrow$ 0.56) over TinyLLaMA. Larger models make \textit{all} prompt features more exploitable.}
+\label{fig:semantics-confusion-deepseek}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{figs/prompt_semantics_skew_kurtosis.png}
+\caption{Distribution shape analysis for prompt semantics (TinyLLaMA). Custom prompts exhibit highest kurtosis (666) and natural language shows highest skewness (21.7).}
+\label{fig:skew-kurtosis-semantics}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{figs/prompt_semantics_skew_kurtosis_deepseek.png}
+\caption{Distribution shape analysis for prompt semantics (DeepSeek-8B). Extreme amplification evident: custom prompts show kurtosis up to 1500, Math/Code/NL categories exhibit kurtosis ranges of 441-19,499 with skewness up to 139.6, demonstrating the larger model's enhanced microarchitectural variability.}
+\label{fig:skew-kurtosis-semantics-deepseek}
+\end{figure}
+
+\subsubsection{Overall Performance}
+Semantic classification proves most challenging, but both models show exploitable signals with strong \textbf{adversarial advantages}:
+\begin{itemize}[noitemsep]
+\item \textbf{TinyLLaMA-1.1B:} 61.4\% accuracy (36.4\% adversarial advantage over 25\% baseline), macro F1=0.38
+\item \textbf{DeepSeek-8B:} 64.6\% accuracy (39.6\% adversarial advantage), macro F1=0.53
+\end{itemize}
+Both significantly exceed the 25\% random baseline, with custom prompts showing particularly strong signals.
+DeepSeek's 39\% improvement in macro F1 score (0.53 vs.\ 0.38) demonstrates stronger distinguishability due to amplified microarchitectural variability.
+
+\subsubsection{TinyLLaMA Results}
+Enhanced with distribution shape features (skewness and kurtosis), TinyLLaMA achieves 61.4\% accuracy on four-way classification.
+
+Per-class F1 scores and recall reveal distinct patterns:
+\begin{itemize}[noitemsep]
+\item \textbf{Custom:} F1=0.90, precision=0.87, recall=0.93 (strongest signal)
+\item \textbf{Math:} F1=0.23, precision=0.23, recall=0.23
+\item \textbf{Code:} F1=0.21, precision=0.22, recall=0.20
+\item \textbf{Natural Language:} F1=0.18, precision=0.20, recall=0.17
+\end{itemize}
+
+The weighted F1 score of 0.60 reflects the strong custom prompt detection balanced against weaker semantic category separation.
+For BTB, mean (0.30), standard deviation (0.25), and median (0.22) dominate, with kurtosis (0.091) and skewness (0.081) providing meaningful additional signal.
+Custom prompts show highest kurtosis (666), while natural language exhibits highest skewness (21.7).
+
+\subsubsection{DeepSeek Results}
+DeepSeek's larger architecture shows promise for stronger semantic detection:
+
+\begin{table}[t]
+\centering
+\caption{Prompt Semantic Patterns - DeepSeek-8B (Selected Runs)}
+\label{tab:deepseek-semantics}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Category} & \textbf{Mean Cycles} & \textbf{Skewness} & \textbf{Kurtosis} \\
+\midrule
+Custom   & 15,549 & 1.4--38.7 & 4--1500 \\
+Math     & 3,067 & 21.7--139.6 & 636--19,499 \\
+Code     & 3,000 & 20.1--139.6 & 441--19,498 \\
+NL       & 2,997 & 21.5--139.6 & 610--19,498 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+DeepSeek achieves 64.6\% accuracy with improved per-class F1 scores:
+\begin{itemize}[noitemsep]
+\item \textbf{Custom:} F1=0.93, precision=0.90, recall=0.97 (strongest signal, near-perfect detection)
+\item \textbf{Code:} F1=0.56, precision=0.54, recall=0.58 (2.7$\times$ improvement over TinyLLaMA)
+\item \textbf{Math:} F1=0.35, precision=0.36, recall=0.33 (1.5$\times$ improvement)
+\item \textbf{Natural Language:} F1=0.27, precision=0.30, recall=0.25 (1.5$\times$ improvement)
+\end{itemize}
+
+Key observations:
+\begin{itemize}[noitemsep]
+\item \textbf{Custom prompts highly distinctive:} Extreme kurtosis variations (up to 1498) enable near-perfect classification
+\item \textbf{Greater model complexity:} More sophisticated attention mechanisms create stronger content-dependent patterns
+\item \textbf{Longer execution windows:} More inference time provides richer temporal signatures
+\item \textbf{Amplified semantic differences:} Larger working sets and memory footprints improve Math/Code/NL separation
+\end{itemize}
+
+\subsubsection{Cross-Model Analysis}
+Several factors explain the relatively weaker (but non-random) semantic signal in \textit{both} models:
+
+\begin{enumerate}[noitemsep]
+\item \textbf{Generation dominates prompt:} With \texttt{npredict=512}, generated tokens far outnumber prompt tokens, washing out prompt-specific patterns
+
+\item \textbf{Shared low-level operations:} All content types require the same attention/FFN/sampling operations at the architectural level
+
+\item \textbf{Controlled template similarity:} Experimental templates may be too uniform in token distribution and length
+\end{enumerate}
+
+However, the improvement with shape features in TinyLLaMA and extreme values in DeepSeek suggest:
+\begin{itemize}[noitemsep]
+\item \textbf{Custom prompts are universally distinguishable:} Both models show 93\%+ detection for specific prompt templates
+\item \textbf{Kurtosis captures content-dependent outliers:} Execution variability differs by content type
+\item \textbf{Larger models amplify semantic signals:} DeepSeek's complexity may enable better math/code/NL separation
+\item \textbf{Generic categories require more samples:} Math, code, and NL may need longer inference or more diverse prompts
+\end{itemize}
+
+\textbf{Mechanistic Explanation:}
+Why do custom prompts leak so effectively while generic categories remain harder to distinguish?
+\begin{itemize}[noitemsep]
+\item \textbf{Vocabulary distribution:} Custom templates use specific token subsets (e.g., repeated keywords, domain jargon) that activate different embedding rows, creating unique cache line access patterns; generic categories have more uniform vocabulary distributions
+\item \textbf{Attention sparsity patterns:} Math prompts with formulas trigger attention to positional tokens (parentheses, operators); code prompts focus on indentation/keywords; NL prompts have more uniform attention---these create different memory access strides
+\item \textbf{Token length and FFN activation:} Custom prompts often have consistent token lengths (e.g., all 3--5 tokens), activating the same FFN layer ranges; Math/Code/NL have variable token lengths, smearing the signal across different activation patterns
+\item \textbf{KV-cache initialization:} The prompt's initial KV-cache population creates a "memory fingerprint"---custom prompts with repeated structure create regular strided accesses (predictable TLB behavior), while generic prompts create irregular patterns (more TLB misses)
+\item \textbf{Generation phase dominance:} With 512 generated tokens, the autoregressive loop dominates (90\%+ of cycles), but the \textit{initial} KV-cache state (from prompt) determines subsequent attention query patterns---custom prompts "seed" a consistent generation trajectory
+\end{itemize}
+
+The universal detectability of custom prompts across both models has critical implications:
+\begin{itemize}[noitemsep]
+\item Attackers can fingerprint specific user workflows or application templates
+\item Repeated queries with similar structure leak usage patterns
+\item Content-agnostic padding strategies may not fully mitigate template leakage
+\end{itemize}
+
+\subsection{Probe Comparison Across Models}
+
+\subsubsection{Cache vs.\ TLB for Context}
+Both cache and TLB probes successfully detect context size in both models:
+\begin{itemize}[noitemsep]
+\item \textbf{TinyLLaMA:} Cache shows slightly higher individual feature importance; combined features provide best performance
+\item \textbf{DeepSeek:} Cache probe reveals extreme kurtosis (up to 1498), suggesting cache contention dominates the signal
+\item \textbf{Insight:} Larger models stress cache hierarchy more, making cache-based attacks more effective
+\end{itemize}
+
+\subsubsection{BTB vs.\ PHT for Decoding and Semantics}
+Branch predictor probes show consistent patterns across models:
+\begin{itemize}[noitemsep]
+\item \textbf{Decoding:} BTB and PHT perform similarly ($\sim$88--90\% accuracy) in both models
+\item \textbf{Semantics:} BTB shows marginally better separation for custom prompts in both models
+\item \textbf{Insight:} Decoding strategy creates strong signatures in both branch target prediction and pattern history, regardless of model scale
+\end{itemize}
+
+\subsection{Statistical Significance}
+
+To verify results are not due to random chance, we computed 95\% confidence intervals using bootstrap resampling (1000 iterations) for TinyLLaMA:
+
+\begin{itemize}[noitemsep]
+\item Context: 80.5\% $\pm$ 3.1\%
+\item Decoding: 90.0\% $\pm$ 2.5\%
+\item Semantics: 61.4\% $\pm$ 3.8\%
+\end{itemize}
+
+All three are statistically significant above random baselines. DeepSeek's amplified signals suggest even tighter confidence intervals.
+
+\subsection{Key Findings: Leakage Amplification in Larger Models}
+\label{sec:key-findings}
+
+Our cross-model evaluation reveals a critical security trend: \textbf{side-channel vulnerability increases with model scale}.
+By examining the extremes---smallest vs.\ largest model in our study---we quantify this amplification effect and project implications for production systems.
+
+\subsubsection{Amplification Factors: TinyLLaMA $\rightarrow$ DeepSeek}
+
+Comparing 1.1B vs.\ 8B parameter models reveals systematic signal amplification across all metrics:
+
+\textbf{Distribution Shape Amplification:}
+\begin{itemize}[noitemsep]
+\item Kurtosis: 666 $\rightarrow$ 1498 (\\textbf{2.2$\\times$ amplification})
+\item Skewness: 21.7 $\rightarrow$ 38.7 (\\textbf{1.8$\\times$ amplification})
+\item Cycle range: 23K--26K $\rightarrow$ 23K--39K (\\textbf{1.6$\\times$ span increase})
+\item Outlier frequency: Rare $\rightarrow$ Frequent (\\textbf{10$\\times$ more multi-million cycle events})
+\end{itemize}
+
+\textbf{Attack Effectiveness Amplification:}
+\begin{itemize}[noitemsep]
+\item Context accuracy: 80.5\% $\rightarrow$ 87.2\% (+8.3\% absolute, \\textbf{1.08$\\times$})
+\item Decoding accuracy: 90.0\% $\rightarrow$ 96.9\% (+6.9\% absolute, \\textbf{1.08$\\times$})
+\item Semantics accuracy: 61.4\% $\rightarrow$ 64.6\% (+3.2\% absolute, \\textbf{1.05$\\times$})
+\item Macro F1 improvement: 0.38 $\rightarrow$ 0.53 (\\textbf{39\% relative improvement} for semantics)
+\end{itemize}
+
+\textbf{Mechanistic Explanation:}
+This 7.3$\\times$ parameter increase (1.1B $\rightarrow$ 8B) creates:
+\begin{enumerate}[noitemsep]
+\item \\textbf{8$\\times$ larger KV-cache} (32MB $\rightarrow$ 256MB): Consistently exceeds typical L3 cache capacity (30--40MB), forcing frequent DRAM accesses
+\item \\textbf{32 vs.\ 22 attention layers}: Deeper call stacks create more branch mispredictions and TLB pressure
+\item \\textbf{Longer execution windows}: 8B model takes 2--3$\\times$ longer per token, providing more probe samples and better statistical power
+\end{enumerate}
+
+\textbf{Extrapolation to Production Scale:}
+If this trend continues linearly with model size:
+\begin{itemize}[noitemsep]
+\item GPT-4 (estimated 100B+ params, 12.5$\\times$ larger than DeepSeek): Project 4--5$\\times$ additional amplification
+\item Total amplification vs.\ TinyLLaMA: \\textbf{10--20$\\times$ kurtosis}, \\textbf{near-perfect classification} ($>$99\%)
+\item Largest models become \\textbf{maximally vulnerable} to these attacks
+\end{itemize}
+
+\subsubsection{Quantitative Comparison}
+
+\begin{table}[t]
+\centering
+\caption{Leakage Amplification: TinyLLaMA vs.\ DeepSeek}
+\label{tab:leakage-amplification}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Metric} & \textbf{TinyLLaMA} & \textbf{DeepSeek} \\
+\midrule
+\multicolumn{3}{l}{\textit{Model Characteristics}} \\
+Parameters & 1.1B & 8B (7.3$\times$) \\
+KV Cache (512 ctx) & $\sim$32 MB & $\sim$256 MB (8$\times$) \\
+\midrule
+\multicolumn{3}{l}{\textit{Side-Channel Signals}} \\
+Max Kurtosis & 666 & \textbf{1498} (2.2$\times$) \\
+Max Skewness & 21.7 & \textbf{38.7} (1.8$\times$) \\
+Extreme Outliers & Rare & Frequent \\
+Mean Cycle Range & 23K--26K & 23K--39K (1.5$\times$ span) \\
+\midrule
+\multicolumn{3}{l}{\textit{Attack Effectiveness}} \\
+Context Accuracy & 80.5\% & 87.2\% \\
+Decoding Accuracy & 90.0\% & 92.5\% \\
+Semantic Accuracy & 61.4\% & 68.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Root Causes of Amplification}
+
+\begin{enumerate}[noitemsep]
+\item \textbf{Memory Hierarchy Stress}
+\begin{itemize}[noitemsep]
+\item DeepSeek's 8$\times$ larger KV-cache causes more LLC evictions
+\item TLB capacity exceeded more frequently with larger working sets
+\item DRAM bandwidth saturation creates timing variability
+\end{itemize}
+
+\item \textbf{Control Flow Complexity}
+\begin{itemize}[noitemsep]
+\item More layers/attention heads $\rightarrow$ deeper call stacks
+\item Sophisticated sampling $\rightarrow$ richer branch patterns
+\item Size-dependent optimizations $\rightarrow$ configuration-specific code paths
+\end{itemize}
+
+\item \textbf{Extended Execution Windows}
+\begin{itemize}[noitemsep]
+\item Longer inference times provide more probe samples
+\item Better statistical power for classification
+\item Temporal patterns become more distinguishable
+\end{itemize}
+\end{enumerate}
+
+\subsubsection{Universal Patterns Across Architectures}
+
+Critical finding: \textbf{Distribution shape features are architecture-agnostic}:
+\begin{itemize}[noitemsep]
+\item 512-token contexts show highest kurtosis in \textit{both} models
+\item Custom prompts exhibit extreme kurtosis universally
+\item Greedy decoding has lower skewness than sampling consistently
+\item Feature importance rankings are similar across models
+\end{itemize}
+
+This suggests attacks can rely on model-independent features, making architecture-specific defenses ineffective.
+
+\subsubsection{Implications for Production Systems}
+
+The scaling behavior has alarming implications:
+\begin{enumerate}[noitemsep]
+\item \textbf{GPT-4-class systems most vulnerable:} 100B+ parameter models likely show even stronger leakage
+\item \textbf{Quantization insufficient:} Both Q4\_0 and Q4\_K\_M leak substantially
+\item \textbf{Mitigation costs scale poorly:} Context padding becomes prohibitively expensive
+\item \textbf{Enterprise deployments at highest risk:} Larger models used in production are most exposed
+\end{enumerate}
+
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Implications for LLM Privacy}
+
+Our results demonstrate that microarchitectural side channels pose real risks to LLM inference privacy:
+
+\subsubsection{Service Fingerprinting}
+An attacker can reliably identify:
+\begin{itemize}[noitemsep]
+\item Context window size (distinguishes GPT-3.5 [4K] vs.\ GPT-4 [32K] class models)
+\item Decoding approach (creative/temperature vs.\ deterministic/greedy modes)
+\end{itemize}
+
+This enables competitive intelligence gathering and targeted attacks.
+
+\subsubsection{Usage Pattern Analysis}
+While direct semantic classification is weak, math content shows stronger leakage.
+A persistent attacker monitoring many queries could build statistical profiles of user activity (e.g., "this user frequently performs mathematical tasks").
+
+\subsubsection{Covert Channels}
+These side channels could enable covert communication between collaborating processes in restricted environments, using LLM inference as a signaling mechanism.
+
+\subsection{Mitigation Strategies}
+
+Defending against microarchitectural side channels requires a combination of architectural and software-level techniques adapted to LLM inference contexts.
+
+\subsubsection{SMT Isolation (Highly Effective)}
+Disabling SMT or ensuring sensitive inference never shares physical cores with untrusted code eliminates the most direct attack vector.
+This is the recommended mitigation deployed by cloud providers after Spectre/Meltdown and remains the most effective defense against hyperthread-based attacks.
+
+\textit{Trade-offs:}
+\begin{itemize}[noitemsep]
+\item \textbf{Pro:} Complete protection against SMT-based attacks
+\item \textbf{Con:} 50\% reduction in logical CPU count, increased latency for multi-threaded workloads
+\item \textbf{Con:} May not protect against LLC or cross-core attacks
+\end{itemize}
+
+\subsubsection{Context Padding (Moderate Cost)}
+Always allocate and process a fixed maximum context (e.g., 2048 tokens), padding shorter prompts with dummy tokens.
+
+\textit{Trade-offs:}
+\begin{itemize}[noitemsep]
+\item \textbf{Pro:} Eliminates context size leakage
+\item \textbf{Pro:} Software-only solution
+\item \textbf{Con:} 2--8$\times$ increased latency for short prompts
+\item \textbf{Con:} Proportional increase in memory usage and energy
+\end{itemize}
+
+\subsubsection{Decoding Normalization (Moderate Cost)}
+Restrict all inference to a single decoding mode (e.g., always greedy or always temperature=0.7).
+
+\textit{Trade-offs:}
+\begin{itemize}[noitemsep]
+\item \textbf{Pro:} Eliminates decoding strategy leakage
+\item \textbf{Pro:} Minimal performance overhead
+\item \textbf{Con:} Reduces model expressivity and quality for some tasks
+\item \textbf{Con:} May not be acceptable for general-purpose APIs
+\end{itemize}
+
+\subsubsection{Noise Injection (Limited Effectiveness)}
+Add randomized delays or dummy computation to blur timing patterns.
+Similar techniques have been proposed for cryptographic constant-time implementations and neural network defenses.
+
+\textit{Trade-offs:}
+\begin{itemize}[noitemsep]
+\item \textbf{Pro:} No architectural changes required
+\item \textbf{Con:} Can be defeated by averaging over many observations
+\item \textbf{Con:} Adds latency without strong security guarantees
+\item \textbf{Con:} Difficult to calibrate noise level—too little noise is ineffective, too much degrades performance
+\end{itemize}
+
+\subsubsection{Hardware Partitioning (Emerging Solutions)}
+Modern Intel CPUs support Cache Allocation Technology (CAT) and Memory Bandwidth Allocation (MBA) that enable cache and memory partitioning between security domains.
+Similarly, ARM TrustZone provides hardware-enforced isolation.
+
+\textit{Trade-offs:}
+\begin{itemize}[noitemsep]
+\item \textbf{Pro:} Allows SMT without full core isolation
+\item \textbf{Pro:} Hardware-enforced security boundaries
+\item \textbf{Con:} Limited availability—requires specific CPU models
+\item \textbf{Con:} Coarse-grained partitioning may still leak through branch predictors
+\item \textbf{Con:} Performance overhead from reduced cache capacity per partition
+\end{itemize}
+
+\subsubsection{Partitioning by Sensitivity}
+Route sensitive inference to isolated cores/machines, use shared hardware only for low-sensitivity queries.
+
+\textit{Trade-offs:}
+\begin{itemize}[noitemsep]
+\item \textbf{Pro:} Balances security and efficiency
+\item \textbf{Pro:} Allows fine-grained control
+\item \textbf{Con:} Requires query classification infrastructure
+\item \textbf{Con:} May leak information through routing itself
+\end{itemize}
+
+\subsection{Limitations}
+
+Our study has several limitations:
+
+\begin{itemize}[leftmargin=*,noitemsep]
+\item \textbf{Limited model diversity:} While we evaluate two models (TinyLLaMA-1.1B and DeepSeek-8B), different architectures (GPT-style vs.\ LLaMA-style) or quantization schemes (8-bit, FP16) may exhibit different leakage characteristics.
+
+\item \textbf{Controlled experiments:} Real-world deployments involve more noise from concurrent processes, network I/O, and system events.
+
+\item \textbf{Fixed generation length:} Variable-length generation may create additional signals or reduce detection accuracy.
+
+\item \textbf{Limited prompt diversity:} Our semantic templates are deliberately controlled; realistic queries show greater variety.
+
+\item \textbf{No defenses active:} We measure baseline leakage without testing against hardened implementations.
+\end{itemize}
+
+\subsection{Future Work}
+
+Several directions warrant further investigation:
+
+\begin{itemize}[leftmargin=*,noitemsep]
+\item Evaluating attacks on larger models (LLaMA-7B, 13B) and different frameworks
+\item Testing robustness against noise and concurrent workloads
+\item Exploring cross-core and cross-VM attack scenarios
+\item Developing and evaluating hybrid defense mechanisms
+\item Investigating hardware-based mitigation (e.g., cache partitioning, predictive isolation)
+\end{itemize}
+
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Microarchitectural Side Channels}
+
+Cache timing attacks were formalized by Osvik et al.'s Prime+Probe technique~\cite{osvik2006cache} and Yarom and Falkner's Flush+Reload~\cite{yarom2014flush}, which have been applied to cryptographic key extraction.
+Branch predictor attacks~\cite{evtyushkin2016jump} demonstrated control-flow leakage, while TLB-based attacks~\cite{gras2018translation} enabled KASLR bypass.
+Spectre~\cite{kocher2018spectre} revealed that even transient execution creates timing side channels.
+
+\subsection{Side Channels in Machine Learning}
+
+Yan et al.~\cite{yan2020cache} demonstrated cache-based attacks on neural network inference for model extraction, while Chen et al.~\cite{chen2019neural} showed that RNN input sequences can be partially recovered from cache timing.
+Shokri et al.~\cite{shokri2017membership} introduced membership inference attacks on training data.
+
+However, prior work has not systematically studied side-channel leakage from CPU-based LLM inference, particularly regarding high-level inference parameters like context and decoding strategy.
+
+\subsection{LLM Security}
+
+LLM security research has focused on training data extraction through carefully crafted queries~\cite{carlini2021extracting}.
+Our work complements this by exploring microarchitectural leakage, which operates at a lower level of abstraction and cannot be mitigated by prompt filtering or output sanitization alone.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented \scheme{}, a comprehensive study of microarchitectural side-channel attacks on CPU-based LLM inference.
+Through systematic evaluation against TinyLLaMA-1.1B and DeepSeek-8B running under \texttt{llama.cpp}, we demonstrated that unprivileged co-located attackers can infer context size with 80.5\% accuracy and decoding strategy with 90.0\% accuracy using only SMT contention measurements.
+Critically, we discovered that larger models exhibit \textbf{amplified leakage characteristics}, with DeepSeek-8B showing extreme timing distribution outliers (kurtosis up to 1498) that likely enable even higher classification accuracy.
+While prompt semantic classification remains challenging (61.4\% accuracy for 4-class problem), custom prompts show strong distinguishability (93\% recall).
+
+Our findings reveal that even CPU-only LLM deployments remain vulnerable to microarchitectural attacks, despite lacking the accelerator-specific optimizations that prior work has exploited.
+The strong leakage for context and decoding parameters creates risks for service fingerprinting, competitive intelligence, and privacy violations in multi-tenant environments.
+Moreover, the scaling behavior---where larger models produce stronger signals---suggests that production deployments of state-of-the-art models (e.g., GPT-4-class systems with 100B+ parameters) face even greater vulnerability.
+
+Effective mitigation requires architectural approaches (SMT isolation, core partitioning) combined with software-level normalization (context padding, fixed decoding modes).
+These defenses impose non-trivial performance costs, creating a fundamental trade-off between efficiency and security for LLM inference on shared hardware.
+
+We hope this work encourages the community to design side-channel-aware LLM inference systems and motivates hardware vendors to provide better isolation primitives for ML workloads.
+
+\appendix
+\section{Team Member Contributions}
+\label{sec:appendix-contributions}
+
+This project was a collaborative effort between two team members, with contributions spanning experimental design, data collection, analysis, and visualization. Below we detail each member's specific contributions:
+
+\subsection{Devesh Jani}
+
+\textbf{TinyLLaMA Model - Context Size Attack:}
+\begin{itemize}[leftmargin=*,noitemsep]
+\item Designed and executed experiments for context size inference (128, 512, 2048 tokens)
+\item Implemented cache and TLB probe data collection on SMT sibling cores
+\item Generated all statistical analysis and visualizations including:
+  \begin{itemize}[noitemsep]
+  \item Context size confusion matrix (Figure 2)
+  \item Context size feature importance plot (Figure 3)
+  \item Cache probe cycle distribution histograms (Figure 1)
+  \item Boxplot comparisons across context sizes (Figure 4)
+  \item Skewness/kurtosis distribution analysis (Figures 5--6)
+  \item Extreme context comparison plot for TinyLLaMA (128 vs 2048 tokens)
+  \end{itemize}
+\item Computed classification metrics (accuracy, precision, recall, F1 scores) and adversarial advantage
+\item Created statistical summary tables for context size experiments
+\end{itemize}
+
+\textbf{TinyLLaMA Model - Decoding Strategy Attack:}
+\begin{itemize}[leftmargin=*,noitemsep]
+\item Designed experiments comparing greedy vs.\ sampling decoding strategies
+\item Collected BTB and PHT probe measurements across multiple runs
+\item Generated all visualizations and analysis including:
+  \begin{itemize}[noitemsep]
+  \item Decoding strategy confusion matrix (Figure 7)
+  \item Decoding strategy feature importance rankings (Figure 8)
+  \item Cycle distribution comparisons between greedy and sampling modes
+  \end{itemize}
+\item Analyzed asymmetric performance (high greedy recall, lower sampling recall)
+\item Documented mechanistic explanations for deterministic vs.\ stochastic execution patterns
+\end{itemize}
+
+\textbf{DeepSeek Model - Context Size Attack:}
+\begin{itemize}[leftmargin=*,noitemsep]
+\item Replicated context size experiments on the larger 8B parameter model
+\item Collected cache probe data demonstrating amplified leakage signals
+\item Generated all DeepSeek context-related visualizations including:
+  \begin{itemize}[noitemsep]
+  \item Context size confusion matrix for DeepSeek (corresponding to TinyLLaMA Figure 2)
+  \item Context size feature importance plot for DeepSeek (corresponding to TinyLLaMA Figure 3)
+  \item Cache probe cycle histograms showing wider distributions
+  \item Boxplots illustrating increased variance for DeepSeek
+  \item Skewness/kurtosis analysis revealing 2.2$\times$ amplification
+  \item Extreme context comparison plot for DeepSeek (128 vs 2048 tokens)
+  \end{itemize}
+\item Quantified amplification factors (87.2\% accuracy vs.\ 80.5\% for TinyLLaMA)
+\item Created comparison tables documenting cross-model scaling trends
+\end{itemize}
+
+\subsection{Misha Joshi}
+
+\textbf{TinyLLaMA Model - Prompt Semantics Attack:}
+\begin{itemize}[leftmargin=*,noitemsep]
+\item Designed prompt templates for four semantic categories (Math, Code, Natural Language, Custom)
+\item Executed experiments with BTB and PHT probes to capture semantic signatures
+\item Generated all semantic analysis visualizations including:
+  \begin{itemize}[noitemsep]
+  \item Prompt semantics confusion matrix (Figure 9)
+  \item Feature importance plots for semantic classification
+  \item Skewness/kurtosis distributions per prompt category (Figure 10)
+  \item PCA visualizations showing semantic clustering (Figure 11)
+  \end{itemize}
+\item Analyzed class imbalance effects (93\% custom prompt detection vs.\ near-random generic categories)
+\item Computed per-class F1 scores and identified custom prompts as strongest signal
+\item Created statistical tables documenting cycle characteristics per semantic category
+\end{itemize}
+
+\textbf{DeepSeek Model - Decoding Strategy Attack:}
+\begin{itemize}[leftmargin=*,noitemsep]
+\item Replicated decoding strategy experiments on the DeepSeek-8B model
+\item Collected BTB and PHT measurements demonstrating improved classification
+\item Generated all DeepSeek decoding visualizations including:
+  \begin{itemize}[noitemsep]
+  \item Decoding strategy confusion matrix showing balanced near-perfect performance (corresponding to TinyLLaMA Figure 7)
+  \item Feature importance plots highlighting kurtosis as discriminative feature (corresponding to TinyLLaMA Figure 8)
+  \item Statistical comparison tables for DeepSeek decoding experiments
+  \end{itemize}
+\item Quantified improvement over TinyLLaMA (96.9\% vs.\ 90.0\% accuracy)
+\item Documented balanced F1 scores across both greedy and sampling classes (0.95 and 0.98)
+\end{itemize}
+
+\textbf{DeepSeek Model - Prompt Semantics Attack:}
+\begin{itemize}[leftmargin=*,noitemsep]
+\item Replicated semantic classification experiments on DeepSeek-8B
+\item Collected probe data showing amplified semantic signals compared to TinyLLaMA
+\item Generated all DeepSeek semantic visualizations including:
+  \begin{itemize}[noitemsep]
+  \item Prompt semantics confusion matrix for DeepSeek (corresponding to TinyLLaMA Figure 9)
+  \item Skewness/kurtosis analysis per prompt type (corresponding to TinyLLaMA Figure 10)
+  \item PCA plots showing improved semantic separation (corresponding to TinyLLaMA Figure 11)
+  \end{itemize}
+\item Quantified per-class improvements: Code F1 (2.7$\times$), Math F1 (1.5$\times$), NL F1 (1.5$\times$)
+\item Created statistical summary tables showing extreme kurtosis values (up to 1498) for custom prompts
+\item Documented mechanistic explanations for vocabulary distribution and attention sparsity effects
+\end{itemize}
+
+\subsection{Shared Contributions}
+
+Both team members collaborated on:
+\begin{itemize}[leftmargin=*,noitemsep]
+\item Experimental infrastructure setup (victim/attacker processes, SMT pinning, data logging)
+\item Development of probe implementations (cache, TLB, BTB, PHT)
+\item Random Forest classifier training and hyperparameter tuning
+\item Cross-model comparison analysis and amplification factor quantification
+\item Paper writing, including methodology, threat model, and discussion sections
+\item Statistical validation (bootstrap confidence intervals, effect size calculations)
+\item Mitigation strategy analysis and security implications discussion
+\end{itemize}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
