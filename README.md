@@ -209,25 +209,6 @@ The complete research paper is available in [`ECE592-Final_Project_Report.pdf`](
 - scikit-learn 1.3+
 - Models: TinyLLaMA-1.1B-Chat-v1.0 (Q4_0), DeepSeek-R1-Distill-Llama-8B (Q4_K_M)
 
-### Data Availability
-Full experimental logs are preserved in `TinyLlama/logs/` and `DeepSeek/logs/`:
-- `index.csv`: Master index of all runs (700+ experiments)
-- `runs/<run_id>/`: Per-run probe data, metadata, timings, frequency samples
-
-## Citation
-
-If you use this work, please cite:
-
-```bibtex
-@inproceedings{jani2025sidechannel,
-  title={Microarchitectural Side-Channel Attacks on CPU-Based LLM Inference},
-  author={Jani, Devesh and Joshi, Misha},
-  booktitle={ECE 592 Advanced Topics in Computer Engineering - Final Project},
-  institution={North Carolina State University},
-  year={2025}
-}
-```
-
 ## Team Contributions
 
 **Devesh Jani:**
@@ -248,29 +229,3 @@ If you use this work, please cite:
 - Paper writing and result interpretation
 - Mitigation analysis and security implications
 
-## License
-
-MIT License - See LICENSE file for details.
-
-## Acknowledgments
-
-- llama.cpp community for CPU-optimized inference
-- TinyLLaMA and DeepSeek teams for open-source models
-- ECE 592 course staff for project guidance
-
-## Related Work
-
-- **Cache Side Channels**: Osvik et al. (Prime+Probe), Yarom & Falkner (Flush+Reload)
-- **ML Side Channels**: Yan et al. (cache attacks on NNs), Chen et al. (RNN input inference)
-- **LLM Security**: Carlini et al. (training data extraction), Shokri et al. (membership inference)
-- **Speculative Execution**: Kocher et al. (Spectre), Gras et al. (TLB attacks)
-
-## Contact
-
-For questions or collaborations:
-- Devesh Jani: dhjani2@ncsu.edu
-- Misha Joshi: mjoshi7@ncsu.edu
-
----
-
-**Disclaimer:** This research is for educational and academic purposes. Unauthorized use of side-channel attacks against production systems may violate terms of service and applicable laws.
