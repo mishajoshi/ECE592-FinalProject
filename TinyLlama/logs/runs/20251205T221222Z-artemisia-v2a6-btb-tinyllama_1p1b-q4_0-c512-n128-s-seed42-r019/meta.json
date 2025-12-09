@@ -1,0 +1,33 @@
+{
+  "attacker_cpu": 6,
+  "ctx": 512,
+  "decoding": "sample",
+  "durations_ms": {
+    "probe_ms": 44,
+    "total_ms": 164,
+    "victim_warmup_ms": 100
+  },
+  "host": "artemisia",
+  "model": "/home/dhjani2/llama.cpp/models/tinyllama-1.1b-q4_0.gguf",
+  "model_tag": "tinyllama_1p1b",
+  "npredict": 128,
+  "probe": "btb",
+  "prompt": "Write a short story about a robot.",
+  "prompt_hash": "",
+  "prompt_label": "custom",
+  "quant": "q4_0",
+  "repeat_idx": 19,
+  "run_id": "20251205T221222Z-artemisia-v2a6-btb-tinyllama_1p1b-q4_0-c512-n128-s-seed42-r019",
+  "seed": 42,
+  "temp": 1.0,
+  "timestamp_utc": "2025-12-05T22:12:22Z",
+  "top_k": null,
+  "top_p": null,
+  "versions": {
+    "analysis_git": null,
+    "driver": "v0.1",
+    "llama_cpp_git": null,
+    "probe_git": null
+  },
+  "victim_cpu": 2
+}

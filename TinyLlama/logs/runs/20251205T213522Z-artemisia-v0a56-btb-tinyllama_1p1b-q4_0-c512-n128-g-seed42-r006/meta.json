@@ -1,0 +1,33 @@
+{
+  "attacker_cpu": 56,
+  "ctx": 512,
+  "decoding": "greedy",
+  "durations_ms": {
+    "probe_ms": 54,
+    "total_ms": 184,
+    "victim_warmup_ms": 100
+  },
+  "host": "artemisia",
+  "model": "/home/dhjani2/llama.cpp/models/tinyllama-1.1b-q4_0.gguf",
+  "model_tag": "tinyllama_1p1b",
+  "npredict": 128,
+  "probe": "btb",
+  "prompt": "Write a Python implementation of Dijkstra's shortest-path algorithm using adjacency lists and a min-heap. Include complexity analysis.",
+  "prompt_hash": "",
+  "prompt_label": "code",
+  "quant": "q4_0",
+  "repeat_idx": 6,
+  "run_id": "20251205T213522Z-artemisia-v0a56-btb-tinyllama_1p1b-q4_0-c512-n128-g-seed42-r006",
+  "seed": 42,
+  "temp": 0.0,
+  "timestamp_utc": "2025-12-05T21:35:22Z",
+  "top_k": null,
+  "top_p": null,
+  "versions": {
+    "analysis_git": null,
+    "driver": "v0.1",
+    "llama_cpp_git": null,
+    "probe_git": null
+  },
+  "victim_cpu": 0
+}

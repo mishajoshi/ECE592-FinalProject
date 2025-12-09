@@ -1,0 +1,33 @@
+{
+  "attacker_cpu": 6,
+  "ctx": 512,
+  "decoding": "greedy",
+  "durations_ms": {
+    "probe_ms": 44,
+    "total_ms": 164,
+    "victim_warmup_ms": 100
+  },
+  "host": "artemisia",
+  "model": "/home/dhjani2/llama.cpp/models/tinyllama-1.1b-q4_0.gguf",
+  "model_tag": "tinyllama_1p1b",
+  "npredict": 512,
+  "probe": "btb",
+  "prompt": "You are a creative writer.\nCompose a narrative paragraph describing a sunrise over the ocean, focusing on imagery and sensory details without using lists or code.",
+  "prompt_hash": "",
+  "prompt_label": "nl",
+  "quant": "q4_0",
+  "repeat_idx": 15,
+  "run_id": "20251205T215020Z-artemisia-v2a6-btb-tinyllama_1p1b-q4_0-c512-n512-g-seed42-r015",
+  "seed": 42,
+  "temp": 0.0,
+  "timestamp_utc": "2025-12-05T21:50:20Z",
+  "top_k": null,
+  "top_p": null,
+  "versions": {
+    "analysis_git": null,
+    "driver": "v0.1",
+    "llama_cpp_git": null,
+    "probe_git": null
+  },
+  "victim_cpu": 2
+}
